@@ -10,8 +10,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from .database import Base, engine, get_db
-from . import models, schemas
+from app.database import Base, engine, get_db
+from app import models, schemas
 
 Base.metadata.create_all(bind=engine)
 
