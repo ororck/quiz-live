@@ -3,9 +3,12 @@ import random
 import string
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from .database import Base, engine, get_db
 from . import models, schemas
@@ -14,6 +17,10 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # ---------------------------------------------------------------------------
 # Gestionnaire de connexions WebSocket
@@ -21,7 +28,6 @@ app = FastAPI()
 
 class ConnectionManager:
     def __init__(self):
-        # dict: session_code -> liste de WebSockets connectes
         self.active: dict[str, list[WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, session_code: str):
@@ -76,7 +82,8 @@ def list_bank_questions(category: str | None = None, db: Session = Depends(get_d
 # ---------------------------------------------------------------------------
 
 @app.post("/sessions", response_model=schemas.SessionOut)
-def create_session(payload: schemas.SessionCreate, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def create_session(request: Request, payload: schemas.SessionCreate, db: Session = Depends(get_db)):
     code = generate_code()
     session = models.QuizSession(code=code, mode=payload.mode)
     db.add(session); db.commit(); db.refresh(session)
@@ -114,7 +121,6 @@ async def start_question(code: str, question_id: int, db: Session = Depends(get_
     q.started_at = datetime.now(timezone.utc)
     db.commit(); db.refresh(q)
 
-    # diffuse la question a tous les participants via WebSocket
     await manager.broadcast(code, {
         "type": "question_start",
         "question_id": q.id,
@@ -134,7 +140,6 @@ async def reveal_question(code: str, question_id: int, db: Session = Depends(get
     q.status = "revealed"
     db.commit()
 
-    # calcul des stats
     breakdown: dict[int, int] = {i: 0 for i in range(q.num_choices)}
     results = []
     correct_count = 0
@@ -158,7 +163,6 @@ async def reveal_question(code: str, question_id: int, db: Session = Depends(get
         results=results,
     )
 
-    # diffuse les stats a tous
     await manager.broadcast(code, {
         "type": "question_reveal",
         "question_id": q.id,
@@ -173,12 +177,12 @@ async def reveal_question(code: str, question_id: int, db: Session = Depends(get
 # ---------------------------------------------------------------------------
 
 @app.post("/sessions/{code}/join", response_model=schemas.ParticipantOut)
-async def join_session(code: str, payload: schemas.ParticipantCreate, db: Session = Depends(get_db)):
+@limiter.limit("20/minute")
+async def join_session(request: Request, code: str, payload: schemas.ParticipantCreate, db: Session = Depends(get_db)):
     session = db.query(models.QuizSession).filter_by(code=code).first()
     if not session:
         raise HTTPException(404, "Session introuvable")
 
-    # si le participant existe deja, on le retourne sans doublon
     existing = db.query(models.Participant).filter_by(
         session_id=session.id,
         display_name=payload.display_name
@@ -202,14 +206,14 @@ async def join_session(code: str, payload: schemas.ParticipantCreate, db: Sessio
 # ---------------------------------------------------------------------------
 
 @app.post("/sessions/{code}/questions/{question_id}/answer", response_model=schemas.AnswerOut)
-async def submit_answer(code: str, question_id: int, payload: schemas.AnswerCreate, db: Session = Depends(get_db)):
+@limiter.limit("30/minute")
+async def submit_answer(request: Request, code: str, question_id: int, payload: schemas.AnswerCreate, db: Session = Depends(get_db)):
     q = db.query(models.Question).filter_by(id=question_id).first()
     if not q:
         raise HTTPException(404, "Question introuvable")
     if q.status != "active":
         raise HTTPException(400, "La question n'est pas active")
 
-    # verification du timer cote serveur
     if q.time_limit_seconds and q.started_at:
         elapsed = (datetime.now(timezone.utc) - q.started_at.replace(tzinfo=timezone.utc)).total_seconds()
         if elapsed > q.time_limit_seconds:
@@ -224,7 +228,6 @@ async def submit_answer(code: str, question_id: int, payload: schemas.AnswerCrea
     )
     db.add(answer); db.commit(); db.refresh(answer)
 
-    # notifie le formateur qu une reponse est arrivee
     await manager.broadcast(code, {
         "type": "answer_received",
         "question_id": question_id,
@@ -242,7 +245,7 @@ async def websocket_endpoint(websocket: WebSocket, session_code: str):
     await manager.connect(websocket, session_code)
     try:
         while True:
-            await websocket.receive_text()  # garde la connexion vivante
+            await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, session_code)
 
