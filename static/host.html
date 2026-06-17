@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quiz Live — Formateur</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #7c6aff;
+    --accent-dim: #3d3475;
+    --green: #22d98a;
+    --red: #ff5c5c;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* NAV */
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { font-family: var(--mono); font-size: 1rem; color: var(--accent); letter-spacing: 2px; }
+  .badge {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 4px 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+  }
+  .badge span { color: var(--text); margin-left: 6px; }
+
+  /* LAYOUT */
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 0;
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 32px 24px;
+    gap: 32px;
+  }
+
+  /* PANELS */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  /* SETUP SCREEN */
+  #setup-screen { display: flex; flex-direction: column; gap: 16px; }
+  #setup-screen h1 { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+  #setup-screen h1 em { color: var(--accent); font-style: normal; }
+  #setup-screen p { color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
+
+  .btn {
+    font-family: var(--sans);
+    font-size: 0.95rem;
+    font-weight: 500;
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-sm { padding: 8px 14px; font-size: 0.85rem; }
+
+  /* SESSION ACTIVE */
+  #session-screen { display: none; flex-direction: column; gap: 24px; }
+
+  /* QUESTION BUILDER */
+  .question-builder { display: flex; flex-direction: column; gap: 16px; }
+
+  .field-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  label { font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; display: block; }
+
+  .counter-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .counter-group button {
+    background: var(--border);
+    border: none;
+    color: var(--text);
+    font-size: 1.1rem;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .counter-group button:hover { background: var(--accent-dim); }
+  .counter-val {
+    font-family: var(--mono);
+    font-size: 1rem;
+    width: 40px;
+    text-align: center;
+    background: var(--surface);
+    color: var(--text);
+    border: none;
+    outline: none;
+  }
+
+  /* CHOIX */
+  .choices-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+  .choice-btn {
+    padding: 14px 8px;
+    border-radius: 8px;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    text-align: center;
+  }
+  .choice-btn:hover { border-color: var(--accent); }
+  .choice-btn.selected { border-color: var(--green); background: rgba(34,217,138,0.08); color: var(--green); }
+
+  /* TIMER */
+  .timer-row { display: flex; align-items: center; gap: 12px; }
+  .timer-toggle {
+    width: 40px; height: 22px;
+    background: var(--border);
+    border-radius: 11px;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.2s;
+  }
+  .timer-toggle.on { background: var(--accent); }
+  .timer-toggle::after {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: left 0.2s;
+  }
+  .timer-toggle.on::after { left: 21px; }
+  .timer-input {
+    font-family: var(--mono);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 6px 10px;
+    width: 80px;
+    font-size: 0.9rem;
+    display: none;
+  }
+  .timer-input.visible { display: block; }
+
+  /* ACTIONS */
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  /* QUESTION ACTIVE */
+  #active-question {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .q-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .q-label {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  /* TIMER DISPLAY */
+  .timer-display {
+    font-family: var(--mono);
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    padding: 8px 0;
+    transition: color 0.3s;
+  }
+  .timer-display.urgent { color: var(--red); }
+
+  /* ANSWER COUNT */
+  .answer-count {
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .answer-count strong { font-family: var(--mono); color: var(--text); font-size: 1.4rem; }
+
+  /* STATS */
+  #stats-panel { display: none; flex-direction: column; gap: 16px; }
+
+  .stat-bar-row { display: flex; flex-direction: column; gap: 8px; }
+  .stat-bar-item { display: flex; flex-direction: column; gap: 4px; }
+  .stat-bar-label { display: flex; justify-content: space-between; font-size: 0.85rem; }
+  .stat-bar-label .letter { font-family: var(--mono); font-weight: 700; }
+  .stat-bar-label .count { color: var(--muted); font-family: var(--mono); }
+  .stat-bar-track {
+    height: 10px;
+    background: var(--border);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .stat-bar-fill {
+    height: 100%;
+    border-radius: 5px;
+    background: var(--accent);
+    transition: width 0.6s cubic-bezier(.4,0,.2,1);
+  }
+  .stat-bar-fill.correct { background: var(--green); }
+
+  .result-summary {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+  }
+  .result-chip {
+    font-family: var(--mono);
+    font-size: 1.4rem;
+    font-weight: 700;
+    padding: 12px 20px;
+    border-radius: 8px;
+    text-align: center;
+  }
+  .result-chip small { display: block; font-size: 0.65rem; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .chip-green { background: rgba(34,217,138,0.1); color: var(--green); border: 1px solid var(--green); }
+  .chip-red { background: rgba(255,92,92,0.1); color: var(--red); border: 1px solid var(--red); }
+
+  /* SIDEBAR */
+  .sidebar { display: flex; flex-direction: column; gap: 20px; }
+
+  /* QR */
+  #qr-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  #qr-container canvas { border-radius: 8px; }
+  .session-code {
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 6px;
+  }
+  .join-url { font-size: 0.75rem; color: var(--muted); word-break: break-all; text-align: center; }
+
+  /* PARTICIPANTS LIST */
+  #participants-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .participant-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+  .participant-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+  .empty-state { color: var(--muted); font-size: 0.85rem; text-align: center; padding: 16px 0; }
+
+  /* QUESTION HISTORY */
+  #question-history { display: flex; flex-direction: column; gap: 6px; }
+  .history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+  .history-item:hover { border-color: var(--border); }
+  .history-item .q-num { font-family: var(--mono); color: var(--muted); }
+  .history-status { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-family: var(--mono); }
+  .status-revealed { background: rgba(34,217,138,0.1); color: var(--green); }
+  .status-active { background: rgba(124,106,255,0.15); color: var(--accent); }
+  .status-pending { background: var(--border); color: var(--muted); }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">QUIZ_LIVE</span>
+  <span class="badge">FORMATEUR <span id="nav-code">—</span></span>
+  <button class="btn btn-ghost btn-sm" onclick="endSession()" id="btn-end" style="display:none">Terminer ✕</button>
+</nav>
+
+<main>
+  <!-- COLONNE PRINCIPALE -->
+  <div>
+
+    <!-- SETUP -->
+    <div id="setup-screen" class="panel">
+      <h1>Nouvelle<br><em>session live</em></h1>
+      <p>Créez une session, partagez le QR code avec vos participants, puis lancez vos questions une par une.</p>
+      <div style="display:flex;gap:12px;margin-top:8px;">
+        <button class="btn btn-primary" onclick="createSession('live')">Démarrer une session live</button>
+      </div>
+    </div>
+
+    <!-- SESSION ACTIVE -->
+    <div id="session-screen" class="panel">
+      <div class="panel-title">NOUVELLE QUESTION</div>
+
+      <div class="question-builder" id="question-builder">
+        <div class="field-row">
+          <div>
+            <label>Nombre de choix</label>
+            <div class="counter-group">
+              <button onclick="changeChoices(-1)">−</button>
+              <span class="counter-val" id="choices-count">4</span>
+              <button onclick="changeChoices(1)">+</button>
+            </div>
+          </div>
+          <div style="flex:1">
+            <label>Bonne(s) réponse(s) — cliquez pour sélectionner</label>
+            <div class="choices-grid" id="choices-grid"></div>
+          </div>
+        </div>
+
+        <div class="timer-row">
+          <button class="timer-toggle" id="timer-toggle" onclick="toggleTimer()"></button>
+          <span style="font-size:0.9rem;">Décompte</span>
+          <input class="timer-input" id="timer-input" type="number" value="30" min="5" max="120">
+          <span class="timer-input visible" id="timer-label" style="background:transparent;border:none;color:var(--muted);font-size:0.85rem;display:none;">sec</span>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" onclick="launchQuestion()">Lancer la question</button>
+        </div>
+      </div>
+
+      <!-- QUESTION EN COURS -->
+      <div id="active-question">
+        <div class="q-header">
+          <span class="q-label" id="active-q-label">Question #1</span>
+          <button class="btn btn-ghost btn-sm" onclick="revealQuestion()">Révéler les résultats</button>
+        </div>
+
+        <div class="timer-display" id="timer-display" style="display:none"></div>
+
+        <div class="answer-count">
+          <strong id="answer-count-num">0</strong><br>
+          réponses reçues
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div id="stats-panel">
+        <div class="result-summary">
+          <div class="result-chip chip-green">
+            <span id="stat-correct">0</span>
+            <small>CORRECT</small>
+          </div>
+          <div class="result-chip chip-red">
+            <span id="stat-wrong">0</span>
+            <small>FAUX</small>
+          </div>
+        </div>
+        <div class="stat-bar-row" id="stat-bars"></div>
+        <button class="btn btn-primary" onclick="nextQuestion()" style="align-self:flex-start">Question suivante →</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="panel" id="qr-panel" style="display:none">
+      <div class="panel-title">REJOINDRE</div>
+      <div id="qr-container">
+        <canvas id="qr-canvas"></canvas>
+        <div class="session-code" id="sidebar-code"></div>
+        <div class="join-url" id="join-url-text"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">PARTICIPANTS <span id="participant-count" style="color:var(--text)">0</span></div>
+      <div id="participants-list">
+        <div class="empty-state">En attente de participants…</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = '';
+let sessionCode = null;
+let sessionId = null;
+let currentQuestion = null;
+let questionIndex = 0;
+let numChoices = 4;
+let participantScores = {}; // { display_name: { correct: 0, total: 0 } }
+let selectedCorrect = new Set();
+let timerEnabled = false;
+let timerInterval = null;
+let ws = null;
+let participants = [];
+let questionHistory = [];
+
+// ------- INIT -------
+
+function renderChoicesGrid() {
+  const letters = ['A','B','C','D','E','F'];
+  const grid = document.getElementById('choices-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < numChoices; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn' + (selectedCorrect.has(i) ? ' selected' : '');
+    btn.textContent = letters[i];
+    btn.onclick = () => toggleCorrect(i, btn);
+    grid.appendChild(btn);
+  }
+}
+
+function toggleCorrect(i, btn) {
+  if (selectedCorrect.has(i)) {
+    selectedCorrect.delete(i);
+    btn.classList.remove('selected');
+  } else {
+    selectedCorrect.add(i);
+    btn.classList.add('selected');
+  }
+}
+
+function changeChoices(delta) {
+  numChoices = Math.max(2, Math.min(6, numChoices + delta));
+  document.getElementById('choices-count').textContent = numChoices;
+  selectedCorrect.clear();
+  renderChoicesGrid();
+}
+
+function toggleTimer() {
+  timerEnabled = !timerEnabled;
+  document.getElementById('timer-toggle').classList.toggle('on', timerEnabled);
+  document.getElementById('timer-input').classList.toggle('visible', timerEnabled);
+}
+
+renderChoicesGrid();
+
+// ------- SESSION -------
+
+async function createSession(mode) {
+  const res = await fetch(`${API}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode })
+  });
+  const data = await res.json();
+  sessionCode = data.code;
+  sessionId = data.id;
+
+  document.getElementById('nav-code').textContent = sessionCode;
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('session-screen').style.display = 'flex';
+  document.getElementById('session-screen').style.flexDirection = 'column';
+  document.getElementById('qr-panel').style.display = 'block';
+  document.getElementById('btn-end').style.display = 'block';
+  document.getElementById('history-panel').style.display = 'block';
+
+  const joinUrl = `${window.location.origin}/student.html?session=${sessionCode}`;
+  document.getElementById('sidebar-code').textContent = sessionCode;
+  document.getElementById('join-url-text').textContent = joinUrl;
+
+  // QR Code
+const img = document.createElement('img');
+img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}&bgcolor=1a1a24&color=e8e8f0`;
+img.style.borderRadius = '8px';
+img.width = 180;
+img.height = 180;
+document.getElementById('qr-canvas').replaceWith(img);
+
+  connectWS();
+}
+
+// ------- WEBSOCKET -------
+
+function connectWS() {
+  ws = new WebSocket(`ws://${window.location.host}/ws/${sessionCode}`);
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'participant_join') {
+      addParticipant(msg);
+    } else if (msg.type === 'answer_received') {
+      answerCount = msg.total_answers;
+      document.getElementById('answer-count-num').textContent = answerCount;
+    }
+  };
+}
+
+// ------- PARTICIPANTS -------
+
+function addParticipant(data) {
+  participants.push(data);
+  const count = document.getElementById('participant-count');
+  count.textContent = participants.length;
+  const list = document.getElementById('participants-list');
+  if (list.querySelector('.empty-state')) list.innerHTML = '';
+  const item = document.createElement('div');
+  item.className = 'participant-item';
+  item.innerHTML = `<span class="participant-dot"></span>${data.display_name || 'Anonyme'}`;
+  list.appendChild(item);
+}
+
+// ------- QUESTION -------
+
+async function launchQuestion() {
+  if (selectedCorrect.size === 0) {
+    alert('Sélectionnez au moins une bonne réponse.');
+    return;
+  }
+
+  questionIndex++;
+  const timerSec = timerEnabled ? parseInt(document.getElementById('timer-input').value) : null;
+
+  const res = await fetch(`${API}/sessions/${sessionCode}/questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      order_index: questionIndex,
+      num_choices: numChoices,
+      correct_choices: Array.from(selectedCorrect),
+      time_limit_seconds: timerSec,
+    })
+  });
+  const q = await res.json();
+
+  await fetch(`${API}/sessions/${sessionCode}/questions/${q.id}/start`, { method: 'POST' });
+  currentQuestion = q;
+  answerCount = 0;
+
+  // UI
+  document.getElementById('question-builder').style.display = 'none';
+  document.getElementById('stats-panel').style.display = 'none';
+  document.getElementById('active-question').style.display = 'flex';
+  document.getElementById('active-question').style.flexDirection = 'column';
+  document.getElementById('active-q-label').textContent = `Question #${questionIndex}`;
+  document.getElementById('answer-count-num').textContent = '0';
+
+  addToHistory(q, 'active');
+
+  if (timerSec) startTimerDisplay(timerSec);
+}
+
+function startTimerDisplay(seconds) {
+  const display = document.getElementById('timer-display');
+  display.style.display = 'block';
+  display.classList.remove('urgent');
+  let remaining = seconds;
+
+  const tick = () => {
+    display.textContent = remaining + 's';
+    if (remaining <= 5) display.classList.add('urgent');
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      display.textContent = '0s';
+    }
+    remaining--;
+  };
+  tick();
+  timerInterval = setInterval(tick, 1000);
+}
+
+async function revealQuestion() {
+  clearInterval(timerInterval);
+  const res = await fetch(`${API}/sessions/${sessionCode}/questions/${currentQuestion.id}/reveal`, {
+    method: 'POST'
+  });
+  const stats = await res.json();
+  showStats(stats);
+  updateHistory(currentQuestion.id, 'revealed');
+}
+
+function showStats(stats) {
+  const letters = ['A','B','C','D','E','F'];
+  document.getElementById('active-question').style.display = 'none';
+  document.getElementById('stats-panel').style.display = 'flex';
+  document.getElementById('stats-panel').style.flexDirection = 'column';
+
+  document.getElementById('stat-correct').textContent = stats.correct_count;
+  document.getElementById('stat-wrong').textContent = stats.total_answers - stats.correct_count;
+
+  const bars = document.getElementById('stat-bars');
+  bars.innerHTML = '';
+  const total = stats.total_answers || 1;
+
+  for (let i = 0; i < numChoices; i++) {
+    const count = stats.choices_breakdown[i] || 0;
+    const pct = Math.round((count / total) * 100);
+    const isCorrect = selectedCorrect.has(i);
+
+    bars.innerHTML += `
+      <div class="stat-bar-item">
+        <div class="stat-bar-label">
+          <span class="letter">${letters[i]}${isCorrect ? ' ✓' : ''}</span>
+          <span class="count">${count} rép.</span>
+        </div>
+        <div class="stat-bar-track">
+          <div class="stat-bar-fill ${isCorrect ? 'correct' : ''}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  }
+  // mettre a jour les scores cumulés
+stats.results.forEach(r => {
+  if (!participantScores[r.display_name]) {
+    participantScores[r.display_name] = { correct: 0, total: 0 };
+  }
+  participantScores[r.display_name].total++;
+  if (r.is_correct) participantScores[r.display_name].correct++;
+});
+
+// trier par score
+const ladder = Object.entries(participantScores)
+  .sort((a, b) => b[1].correct - a[1].correct);
+
+// afficher
+const oldDetail = document.getElementById('detail-participants');
+if (oldDetail) oldDetail.remove();
+
+let detail = '<div id="detail-participants" style="margin-top:16px;display:flex;flex-direction:column;gap:6px;">';
+detail += '<div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;margin-bottom:4px;">CLASSEMENT</div>';
+ladder.forEach(([name, score], index) => {
+  const pct = Math.round((score.correct / score.total) * 100);
+  const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+  detail += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:0.85rem;">
+    <span>${medal} ${name}</span>
+    <span style="font-family:var(--mono);color:var(--green)">${score.correct}/${score.total} <span style="color:var(--muted)">(${pct}%)</span></span>
+  </div>`;
+});
+detail += '</div>';
+bars.insertAdjacentHTML('afterend', detail);
+}
+
+function nextQuestion() {
+  clearInterval(timerInterval);
+  currentQuestion = null;
+  selectedCorrect.clear();
+  document.getElementById('stats-panel').style.display = 'none';
+  document.getElementById('active-question').style.display = 'none';
+  document.getElementById('timer-display').style.display = 'none';
+  document.getElementById('timer-display').classList.remove('urgent');
+  document.getElementById('question-builder').style.display = 'flex';
+  renderChoicesGrid();
+}
+
+// ------- HISTORIQUE -------
+
+function addToHistory(q, status) {
+  questionHistory.push({ id: q.id, index: questionIndex, status });
+  renderHistory();
+}
+
+function updateHistory(qId, status) {
+  const entry = questionHistory.find(h => h.id === qId);
+  if (entry) entry.status = status;
+  renderHistory();
+}
+
+function renderHistory() {
+  const container = document.getElementById('question-history');
+  container.innerHTML = '';
+  [...questionHistory].reverse().forEach(h => {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    div.innerHTML = `
+      <span class="q-num">Q${h.index}</span>
+      <span class="history-status status-${h.status}">${h.status}</span>`;
+    container.appendChild(div);
+  });
+}
+renderChoicesGrid();
+
+  function endSession() {
+    if (!confirm('Terminer la session ?')) return;
+    location.reload();
+}
+</script>
+</body>
+</html>

@@ -173,12 +173,27 @@ async def reveal_question(code: str, question_id: int, db: Session = Depends(get
 # ---------------------------------------------------------------------------
 
 @app.post("/sessions/{code}/join", response_model=schemas.ParticipantOut)
-def join_session(code: str, payload: schemas.ParticipantCreate, db: Session = Depends(get_db)):
+async def join_session(code: str, payload: schemas.ParticipantCreate, db: Session = Depends(get_db)):
     session = db.query(models.QuizSession).filter_by(code=code).first()
     if not session:
         raise HTTPException(404, "Session introuvable")
+
+    # si le participant existe deja, on le retourne sans doublon
+    existing = db.query(models.Participant).filter_by(
+        session_id=session.id,
+        display_name=payload.display_name
+    ).first()
+    if existing:
+        return existing
+
     p = models.Participant(session_id=session.id, display_name=payload.display_name)
     db.add(p); db.commit(); db.refresh(p)
+
+    await manager.broadcast(code, {
+        "type": "participant_join",
+        "participant_id": p.id,
+        "display_name": p.display_name,
+    })
     return p
 
 
