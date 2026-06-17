@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Quiz Live</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #7c6aff;
+    --green: #22d98a;
+    --red: #ff5c5c;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+
+  .screen { display: none; width: 100%; max-width: 480px; flex-direction: column; gap: 20px; }
+  .screen.active { display: flex; }
+
+  /* LOGO */
+  .logo {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  /* CARD */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+  }
+
+  h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; }
+  p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+
+  /* INPUT */
+  .field { display: flex; flex-direction: column; gap: 8px; }
+  label { font-size: 0.82rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 1rem;
+    padding: 14px 16px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+
+  /* BUTTONS */
+  .btn {
+    font-family: var(--sans);
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 14px 24px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    width: 100%;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+
+  /* WAITING */
+  .waiting-icon {
+    font-size: 3rem;
+    text-align: center;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .session-badge {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    letter-spacing: 4px;
+  }
+
+  /* TIMER */
+  .timer-bar-wrap {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .timer-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 1s linear, background 0.3s;
+  }
+  .timer-bar.urgent { background: var(--red); }
+
+  .timer-label {
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    transition: color 0.3s;
+  }
+  .timer-label.urgent { color: var(--red); }
+
+  /* CHOIX BUTTONS */
+  .choices-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .choice-btn {
+    aspect-ratio: 1.5;
+    border-radius: 14px;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .choice-btn:active { transform: scale(0.95); }
+  .choice-btn:hover:not(:disabled) { border-color: var(--accent); background: rgba(124,106,255,0.08); }
+  .choice-btn.selected { border-color: var(--accent); background: rgba(124,106,255,0.15); color: var(--accent); }
+  .choice-btn.correct { border-color: var(--green); background: rgba(34,217,138,0.12); color: var(--green); }
+  .choice-btn.wrong { border-color: var(--red); background: rgba(255,92,92,0.08); color: var(--red); opacity: 0.6; }
+  .choice-btn:disabled { cursor: not-allowed; }
+
+  /* CONFIRM */
+  .confirm-row {
+    display: flex;
+    gap: 10px;
+  }
+  .confirm-row .btn { flex: 1; }
+  .btn-confirm { background: var(--green); color: #000; font-weight: 700; }
+
+  /* RESULT */
+  .result-icon { font-size: 4rem; text-align: center; }
+  .result-title { font-size: 1.6rem; font-weight: 700; text-align: center; }
+  .result-title.correct-text { color: var(--green); }
+  .result-title.wrong-text { color: var(--red); }
+  .result-sub { text-align: center; color: var(--muted); font-size: 0.9rem; }
+
+  /* SCORE */
+  .score-row {
+    display: flex;
+    justify-content: space-around;
+    padding: 16px 0;
+  }
+  .score-item { text-align: center; }
+  .score-num {
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 700;
+  }
+  .score-num.green { color: var(--green); }
+  .score-num.red { color: var(--red); }
+  .score-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+  /* SOLO MODE */
+  .mode-cards { display: flex; flex-direction: column; gap: 12px; }
+  .mode-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .mode-card:hover { border-color: var(--accent); }
+  .mode-icon { font-size: 2rem; }
+  .mode-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+  .mode-info p { font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- SCREEN 1 : ACCUEIL -->
+<div class="screen active" id="screen-home">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card">
+    <h2>Rejoindre ou jouer</h2>
+    <p>Entre le code de session pour rejoindre une session live, ou joue seul avec la banque de questions.</p>
+  </div>
+  <div class="mode-cards">
+    <div class="mode-card" onclick="showJoin()">
+      <div class="mode-icon">🎯</div>
+      <div class="mode-info">
+        <h3>Session live</h3>
+        <p>Rejoins une session avec un code</p>
+      </div>
+    </div>
+    <div class="mode-card" onclick="showSolo()">
+      <div class="mode-icon">🧠</div>
+      <div class="mode-info">
+        <h3>Mode solo</h3>
+        <p>Entraîne-toi seul avec la banque de questions</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 2 : JOIN LIVE -->
+<div class="screen" id="screen-join">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <h2>Session live</h2>
+    <div class="field">
+      <label>Code de session</label>
+      <input type="text" id="session-code-input" placeholder="Ex: 7FEHN5" maxlength="6"
+        style="text-transform:uppercase;font-family:var(--mono);letter-spacing:4px;font-size:1.3rem;text-align:center">
+    </div>
+    <div class="field">
+      <label>Ton prénom</label>
+      <input type="text" id="name-input" placeholder="Mohamed" maxlength="24">
+    </div>
+    <button class="btn btn-primary" onclick="joinSession()">Rejoindre →</button>
+    <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
+  </div>
+</div>
+
+<!-- SCREEN 3 : SOLO CATEGORIES -->
+<div class="screen" id="screen-solo">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <h2>Mode solo</h2>
+    <div class="field">
+      <label>Ton prénom</label>
+      <input type="text" id="solo-name-input" placeholder="Mohamed" maxlength="24">
+    </div>
+    <div class="field">
+      <label>Catégorie (optionnel)</label>
+      <input type="text" id="solo-category-input" placeholder="Azure, Linux, Réseau…">
+    </div>
+    <button class="btn btn-primary" onclick="startSolo()">Commencer →</button>
+    <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
+  </div>
+</div>
+
+<!-- SCREEN 4 : ATTENTE -->
+<div class="screen" id="screen-waiting">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;align-items:center;">
+    <div class="waiting-icon">⏳</div>
+    <div class="session-badge" id="waiting-code"></div>
+    <h2 style="text-align:center">En attente…</h2>
+    <p style="text-align:center">Le formateur va lancer la première question. Reste sur cette page !</p>
+  </div>
+</div>
+
+<!-- SCREEN 5 : QUESTION -->
+<div class="screen" id="screen-question">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-family:var(--mono);font-size:0.75rem;color:var(--muted)" id="q-counter">Q1</span>
+      <span class="timer-label" id="timer-label" style="display:none"></span>
+    </div>
+    <div class="timer-bar-wrap" id="timer-bar-wrap" style="display:none">
+      <div class="timer-bar" id="timer-bar" style="width:100%"></div>
+    </div>
+    <div class="choices-grid" id="choices-grid"></div>
+    <div class="confirm-row" id="confirm-row" style="display:none">
+      <button class="btn btn-ghost" onclick="clearSelection()">Effacer</button>
+      <button class="btn btn-confirm" onclick="submitAnswer()">Valider ✓</button>
+    </div>
+    <p style="text-align:center;font-size:0.8rem" id="q-hint">Sélectionne ta réponse</p>
+  </div>
+</div>
+
+<!-- SCREEN 6 : RESULTAT QUESTION -->
+<div class="screen" id="screen-result">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:12px;display:flex;flex-direction:column;align-items:center;">
+    <div class="result-icon" id="result-icon"></div>
+    <div class="result-title" id="result-title"></div>
+    <div class="result-sub" id="result-sub"></div>
+  </div>
+  <div class="card">
+    <div class="score-row">
+      <div class="score-item">
+        <div class="score-num green" id="score-correct">0</div>
+        <div class="score-label">BONNES</div>
+      </div>
+      <div class="score-item">
+        <div class="score-num" style="color:var(--muted)" id="score-total">0</div>
+        <div class="score-label">TOTAL</div>
+      </div>
+      <div class="score-item">
+        <div class="score-num red" id="score-wrong">0</div>
+        <div class="score-label">FAUSSES</div>
+      </div>
+    </div>
+  </div>
+  <p style="text-align:center;color:var(--muted);font-size:0.85rem" id="next-hint">En attente de la prochaine question…</p>
+</div>
+
+<script>
+const API = '';
+const letters = ['A','B','C','D','E','F'];
+
+let sessionCode = null;
+let participantId = null;
+let currentQuestion = null;
+let selectedChoices = new Set();
+let timerInterval = null;
+let timerTotal = 0;
+let ws = null;
+let scoreCorrect = 0;
+let scoreTotal = 0;
+let mode = 'live';
+
+// Solo
+let soloQuestions = [];
+let soloIndex = 0;
+
+// ------- NAVIGATION -------
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showJoin() {
+  // pre-remplir le code si dans l'URL
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('session')) {
+    document.getElementById('session-code-input').value = params.get('session').toUpperCase();
+  }
+  showScreen('screen-join');
+}
+
+function showSolo() {
+  showScreen('screen-solo');
+}
+
+// auto-redirect si ?session= dans l'URL
+window.onload = () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('session')) showJoin();
+};
+
+// ------- JOIN LIVE -------
+
+async function joinSession() {
+  const code = document.getElementById('session-code-input').value.trim().toUpperCase();
+  const name = document.getElementById('name-input').value.trim();
+  if (!code || !name) { alert('Code et prénom requis.'); return; }
+
+  const res = await fetch(`${API}/sessions/${code}/join`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ display_name: name })
+  });
+  if (!res.ok) { alert('Session introuvable.'); return; }
+
+  const data = await res.json();
+  sessionCode = code;
+  participantId = data.id;
+  mode = 'live';
+
+  document.getElementById('waiting-code').textContent = code;
+  showScreen('screen-waiting');
+  connectWS();
+}
+
+// ------- SOLO -------
+
+async function startSolo() {
+  const name = document.getElementById('solo-name-input').value.trim() || 'Joueur';
+  const category = document.getElementById('solo-category-input').value.trim();
+
+  // creer session solo
+  const sRes = await fetch(`${API}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'solo' })
+  });
+  const session = await sRes.json();
+  sessionCode = session.code;
+
+  // rejoindre
+  const pRes = await fetch(`${API}/sessions/${sessionCode}/join`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ display_name: name })
+  });
+  const participant = await pRes.json();
+  participantId = participant.id;
+  mode = 'solo';
+
+  // charger les questions de la banque
+  const url = category ? `${API}/bank/questions?category=${encodeURIComponent(category)}` : `${API}/bank/questions`;
+  const qRes = await fetch(url);
+  soloQuestions = await qRes.json();
+
+  if (soloQuestions.length === 0) {
+    alert('Aucune question disponible pour cette catégorie.');
+    return;
+  }
+
+  soloIndex = 0;
+  scoreCorrect = 0;
+  scoreTotal = 0;
+  await loadSoloQuestion();
+}
+
+async function loadSoloQuestion() {
+  if (soloIndex >= soloQuestions.length) {
+    showFinalScore();
+    return;
+  }
+
+  const bq = soloQuestions[soloIndex];
+
+  // creer la question dans la session
+  const res = await fetch(`${API}/sessions/${sessionCode}/questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      order_index: soloIndex + 1,
+      num_choices: bq.num_choices,
+      correct_choices: [],  // on envoie vide, le serveur a deja les vraies dans bank
+      time_limit_seconds: bq.time_limit_seconds,
+      bank_question_id: bq.id,
+    })
+  });
+  const q = await res.json();
+
+  // start
+  await fetch(`${API}/sessions/${sessionCode}/questions/${q.id}/start`, { method: 'POST' });
+
+  currentQuestion = { ...q, correct_choices_real: bq.correct_choices };
+  renderQuestion(bq.num_choices, bq.time_limit_seconds, soloIndex + 1, bq.choices_text);
+}
+
+// ------- WEBSOCKET -------
+
+function connectWS() {
+  ws = new WebSocket(`ws://${window.location.host}/ws/${sessionCode}`);
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'question_start') {
+      currentQuestion = msg;
+      renderQuestion(msg.num_choices, msg.time_limit_seconds, msg.order_index, null);
+      showScreen('screen-question');
+    } else if (msg.type === 'question_reveal') {
+      showResultFromReveal(msg);
+    }
+  };
+}
+
+// ------- QUESTION -------
+
+function renderQuestion(numChoices, timeLimitSec, orderIndex, choicesText) {
+  selectedChoices.clear();
+  clearInterval(timerInterval);
+
+  document.getElementById('q-counter').textContent = `Q${orderIndex}`;
+  document.getElementById('confirm-row').style.display = 'none';
+  document.getElementById('q-hint').textContent = 'Sélectionne ta réponse';
+
+  // grille de choix
+  const grid = document.getElementById('choices-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < numChoices; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.dataset.index = i;
+    btn.textContent = choicesText ? choicesText[i] : letters[i];
+    if (choicesText) { btn.style.fontSize = '1rem'; btn.style.aspectRatio = 'auto'; btn.style.padding = '16px'; }
+    btn.onclick = () => toggleChoice(i, btn);
+    grid.appendChild(btn);
+  }
+
+  // timer
+  if (timeLimitSec) {
+    timerTotal = timeLimitSec;
+    document.getElementById('timer-label').style.display = 'block';
+    document.getElementById('timer-bar-wrap').style.display = 'block';
+    startTimer(timeLimitSec);
+  } else {
+    document.getElementById('timer-label').style.display = 'none';
+    document.getElementById('timer-bar-wrap').style.display = 'none';
+  }
+
+  showScreen('screen-question');
+}
+
+function toggleChoice(i, btn) {
+  if (btn.disabled) return;
+  if (selectedChoices.has(i)) {
+    selectedChoices.delete(i);
+    btn.classList.remove('selected');
+  } else {
+    selectedChoices.add(i);
+    btn.classList.add('selected');
+  }
+  document.getElementById('confirm-row').style.display = selectedChoices.size > 0 ? 'flex' : 'none';
+}
+
+function clearSelection() {
+  selectedChoices.clear();
+  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('confirm-row').style.display = 'none';
+}
+
+function startTimer(seconds) {
+  const label = document.getElementById('timer-label');
+  const bar = document.getElementById('timer-bar');
+  let remaining = seconds;
+
+  const tick = () => {
+    label.textContent = remaining + 's';
+    bar.style.width = ((remaining / timerTotal) * 100) + '%';
+    if (remaining <= 5) {
+      label.classList.add('urgent');
+      bar.classList.add('urgent');
+    }
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      autoSubmit();
+    }
+    remaining--;
+  };
+  tick();
+  timerInterval = setInterval(tick, 1000);
+}
+
+function autoSubmit() {
+  if (selectedChoices.size === 0) selectedChoices.add(-1); // soumission vide
+  submitAnswer();
+}
+
+// ------- REPONSE -------
+
+async function submitAnswer() {
+  clearInterval(timerInterval);
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+  document.getElementById('confirm-row').style.display = 'none';
+
+  const qId = currentQuestion.question_id || currentQuestion.id;
+
+  const res = await fetch(`${API}/sessions/${sessionCode}/questions/${qId}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      participant_id: participantId,
+      selected_choices: Array.from(selectedChoices).filter(x => x >= 0),
+    })
+  });
+  const answer = await res.json();
+
+  if (mode === 'solo') {
+    showResultSolo(answer);
+  } else {
+    document.getElementById('q-hint').textContent = 'Réponse envoyée — attends le résultat…';
+  }
+}
+
+// ------- RESULTATS -------
+
+function showResultSolo(answer) {
+  scoreTotal++;
+  if (answer.is_correct) scoreCorrect++;
+
+  const correct = currentQuestion.correct_choices_real;
+
+  // colorer les boutons
+  document.querySelectorAll('.choice-btn').forEach(btn => {
+    const i = parseInt(btn.dataset.index);
+    if (correct.includes(i)) btn.classList.add('correct');
+    else if (selectedChoices.has(i)) btn.classList.add('wrong');
+  });
+
+  setTimeout(() => {
+    showResultScreen(answer.is_correct);
+    document.getElementById('next-hint').textContent = '';
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'btn btn-primary';
+    nextBtn.textContent = soloIndex + 1 < soloQuestions.length ? 'Question suivante →' : 'Voir le score final';
+    nextBtn.onclick = () => {
+      soloIndex++;
+      loadSoloQuestion();
+    };
+    document.getElementById('screen-result').appendChild(nextBtn);
+  }, 800);
+}
+
+function showResultFromReveal(msg) {
+  const myAnswer = msg.stats.results.find(r => r.display_name === document.getElementById('name-input').value.trim());
+  const isCorrect = myAnswer ? myAnswer.is_correct : false;
+  scoreTotal++;
+  if (isCorrect) scoreCorrect++;
+  showResultScreen(isCorrect);
+}
+
+function showResultScreen(isCorrect) {
+  document.getElementById('result-icon').textContent = isCorrect ? '🎉' : '❌';
+  document.getElementById('result-title').textContent = isCorrect ? 'Bonne réponse !' : 'Raté…';
+  document.getElementById('result-title').className = 'result-title ' + (isCorrect ? 'correct-text' : 'wrong-text');
+  document.getElementById('result-sub').textContent = isCorrect ? 'Continue comme ça !' : 'Retente au prochain coup.';
+  document.getElementById('score-correct').textContent = scoreCorrect;
+  document.getElementById('score-total').textContent = scoreTotal;
+  document.getElementById('score-wrong').textContent = scoreTotal - scoreCorrect;
+  document.getElementById('next-hint').textContent = 'En attente de la prochaine question…';
+
+  // enlever bouton solo precedent si present
+  const old = document.querySelector('#screen-result .btn');
+  if (old) old.remove();
+
+  showScreen('screen-result');
+}
+
+function showFinalScore() {
+  document.getElementById('result-icon').textContent = '🏁';
+  document.getElementById('result-title').textContent = 'Quiz terminé !';
+  document.getElementById('result-title').className = 'result-title';
+  document.getElementById('result-sub').textContent = `Score final : ${scoreCorrect} / ${scoreTotal}`;
+  document.getElementById('score-correct').textContent = scoreCorrect;
+  document.getElementById('score-total').textContent = scoreTotal;
+  document.getElementById('score-wrong').textContent = scoreTotal - scoreCorrect;
+  document.getElementById('next-hint').textContent = '';
+
+  const old = document.querySelector('#screen-result .btn');
+  if (old) old.remove();
+  const btn = document.createElement('button');
+  btn.className = 'btn btn-ghost';
+  btn.textContent = 'Retour à l\'accueil';
+  btn.onclick = () => showScreen('screen-home');
+  document.getElementById('screen-result').appendChild(btn);
+
+  showScreen('screen-result');
+}
+</script>
+</body>
+</html>
