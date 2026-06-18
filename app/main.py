@@ -13,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from database import Base, engine, get_db
 import models, schemas
 
+# Crée la table question_bank si elle n'existe pas
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -20,6 +21,62 @@ app = FastAPI()
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# ---------------------------------------------------------------------------
+# Structures de données en mémoire (sessions, participants, questions, réponses)
+# Ces données sont éphémères : elles disparaissent quand le container redémarre.
+# C'est voulu : les sessions live sont temporaires.
+# ---------------------------------------------------------------------------
+
+class QuestionState:
+    """État d'une question active dans une session live."""
+    def __init__(self, id, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id):
+        self.id = id
+        self.order_index = order_index
+        self.num_choices = num_choices
+        self.correct_choices = correct_choices
+        self.time_limit_seconds = time_limit_seconds
+        self.bank_question_id = bank_question_id
+        self.status = "pending"     # pending | active | revealed
+        self.started_at = None      # datetime UTC quand la question est lancée
+        # Réponses : dict participant_id -> {selected_choices, is_correct, display_name}
+        self.answers: dict[int, dict] = {}
+
+
+class SessionState:
+    """État complet d'une session live en mémoire."""
+    def __init__(self, code: str, mode: str):
+        self.code = code
+        self.mode = mode
+        self.status = "waiting"                         # waiting | active | ended
+        self.participants: dict[int, str] = {}          # participant_id -> display_name
+        self.questions: dict[int, QuestionState] = {}   # question_id -> QuestionState
+        self._next_participant_id = 1
+        self._next_question_id = 1
+
+    def add_participant(self, display_name: str) -> int:
+        pid = self._next_participant_id
+        self._next_participant_id += 1
+        self.participants[pid] = display_name
+        return pid
+
+    def get_participant_by_name(self, display_name: str) -> int | None:
+        for pid, name in self.participants.items():
+            if name == display_name:
+                return pid
+        return None
+
+    def add_question(self, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id) -> QuestionState:
+        qid = self._next_question_id
+        self._next_question_id += 1
+        q = QuestionState(qid, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id)
+        self.questions[qid] = q
+        return q
+
+
+# Stockage global des sessions actives : code -> SessionState
+sessions: dict[str, SessionState] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +116,7 @@ def compute_is_correct(selected: list[int], correct: list[int]) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Routes : Question Bank
+# Routes : Question Bank (DB persistante)
 # ---------------------------------------------------------------------------
 
 @app.post("/bank/questions", response_model=schemas.QuestionBankOut)
@@ -78,48 +135,63 @@ def list_bank_questions(category: str | None = None, db: Session = Depends(get_d
 
 
 # ---------------------------------------------------------------------------
-# Routes : Sessions
+# Routes : Sessions (mémoire)
 # ---------------------------------------------------------------------------
 
 @app.post("/sessions", response_model=schemas.SessionOut)
 @limiter.limit("10/minute")
-async def create_session(request: Request, payload: schemas.SessionCreate, db: Session = Depends(get_db)):
+async def create_session(request: Request, payload: schemas.SessionCreate):
     code = generate_code()
-    session = models.QuizSession(code=code, mode=payload.mode)
-    db.add(session); db.commit(); db.refresh(session)
-    return session
+    # S'assurer que le code est unique
+    while code in sessions:
+        code = generate_code()
+    sessions[code] = SessionState(code=code, mode=payload.mode)
+    s = sessions[code]
+    return schemas.SessionOut(code=s.code, mode=s.mode, status=s.status)
 
 
 @app.get("/sessions/{code}", response_model=schemas.SessionOut)
-def get_session(code: str, db: Session = Depends(get_db)):
-    session = db.query(models.QuizSession).filter_by(code=code).first()
-    if not session:
+def get_session(code: str):
+    s = sessions.get(code)
+    if not s:
         raise HTTPException(404, "Session introuvable")
-    return session
+    return schemas.SessionOut(code=s.code, mode=s.mode, status=s.status)
 
 
 # ---------------------------------------------------------------------------
-# Routes : Questions (mode live - creees par le formateur)
+# Routes : Questions live (mémoire)
 # ---------------------------------------------------------------------------
 
 @app.post("/sessions/{code}/questions", response_model=schemas.QuestionOut)
-def add_question(code: str, payload: schemas.QuestionCreate, db: Session = Depends(get_db)):
-    session = db.query(models.QuizSession).filter_by(code=code).first()
-    if not session:
+def add_question(code: str, payload: schemas.QuestionCreate):
+    s = sessions.get(code)
+    if not s:
         raise HTTPException(404, "Session introuvable")
-    q = models.Question(session_id=session.id, **payload.model_dump())
-    db.add(q); db.commit(); db.refresh(q)
-    return q
+    q = s.add_question(
+        order_index=payload.order_index,
+        num_choices=payload.num_choices,
+        correct_choices=payload.correct_choices,
+        time_limit_seconds=payload.time_limit_seconds,
+        bank_question_id=payload.bank_question_id,
+    )
+    return schemas.QuestionOut(
+        id=q.id, order_index=q.order_index, num_choices=q.num_choices,
+        correct_choices=q.correct_choices, time_limit_seconds=q.time_limit_seconds,
+        started_at=None, status=q.status, bank_question_id=q.bank_question_id,
+    )
 
 
 @app.post("/sessions/{code}/questions/{question_id}/start", response_model=schemas.QuestionOut)
-async def start_question(code: str, question_id: int, db: Session = Depends(get_db)):
-    q = db.query(models.Question).filter_by(id=question_id).first()
+async def start_question(code: str, question_id: int):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    q = s.questions.get(question_id)
     if not q:
         raise HTTPException(404, "Question introuvable")
+
     q.status = "active"
     q.started_at = datetime.now(timezone.utc)
-    db.commit(); db.refresh(q)
 
     await manager.broadcast(code, {
         "type": "question_start",
@@ -129,30 +201,38 @@ async def start_question(code: str, question_id: int, db: Session = Depends(get_
         "time_limit_seconds": q.time_limit_seconds,
         "started_at": q.started_at.isoformat(),
     })
-    return q
+    return schemas.QuestionOut(
+        id=q.id, order_index=q.order_index, num_choices=q.num_choices,
+        correct_choices=q.correct_choices, time_limit_seconds=q.time_limit_seconds,
+        started_at=q.started_at.isoformat(), status=q.status, bank_question_id=q.bank_question_id,
+    )
 
 
 @app.post("/sessions/{code}/questions/{question_id}/reveal", response_model=schemas.QuestionStats)
-async def reveal_question(code: str, question_id: int, db: Session = Depends(get_db)):
-    q = db.query(models.Question).filter_by(id=question_id).first()
+async def reveal_question(code: str, question_id: int):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    q = s.questions.get(question_id)
     if not q:
         raise HTTPException(404, "Question introuvable")
-    q.status = "revealed"
-    db.commit()
 
+    q.status = "revealed"
+
+    # Calcul des stats depuis les réponses en mémoire
     breakdown: dict[int, int] = {i: 0 for i in range(q.num_choices)}
     results = []
     correct_count = 0
 
-    for answer in q.answers:
-        for choice in answer.selected_choices:
+    for pid, answer in q.answers.items():
+        for choice in answer["selected_choices"]:
             breakdown[choice] = breakdown.get(choice, 0) + 1
-        if answer.is_correct:
+        if answer["is_correct"]:
             correct_count += 1
         results.append(schemas.ParticipantResult(
-            display_name=answer.participant.display_name,
-            selected_choices=answer.selected_choices,
-            is_correct=answer.is_correct,
+            display_name=answer["display_name"],
+            selected_choices=answer["selected_choices"],
+            is_correct=answer["is_correct"],
         ))
 
     stats = schemas.QuestionStats(
@@ -173,72 +253,78 @@ async def reveal_question(code: str, question_id: int, db: Session = Depends(get
 
 
 # ---------------------------------------------------------------------------
-# Routes : Participants
+# Routes : Participants (mémoire)
 # ---------------------------------------------------------------------------
 
 @app.post("/sessions/{code}/join", response_model=schemas.ParticipantOut)
 @limiter.limit("20/minute")
-async def join_session(request: Request, code: str, payload: schemas.ParticipantCreate, db: Session = Depends(get_db)):
-    session = db.query(models.QuizSession).filter_by(code=code).first()
-    if not session:
+async def join_session(request: Request, code: str, payload: schemas.ParticipantCreate):
+    s = sessions.get(code)
+    if not s:
         raise HTTPException(404, "Session introuvable")
 
-    existing = db.query(models.Participant).filter_by(
-        session_id=session.id,
-        display_name=payload.display_name
-    ).first()
-    if existing:
+    # Reconnexion : si le participant existe déjà, on le retourne et on broadcast
+    existing_pid = s.get_participant_by_name(payload.display_name)
+    if existing_pid:
         await manager.broadcast(code, {
-           "type": "participant_join",
-           "participant_id": existing.id,
-           "display_name": existing.display_name,
-    })
-        return existing
+            "type": "participant_join",
+            "participant_id": existing_pid,
+            "display_name": payload.display_name,
+        })
+        return schemas.ParticipantOut(id=existing_pid, display_name=payload.display_name)
 
-    p = models.Participant(session_id=session.id, display_name=payload.display_name)
-    db.add(p); db.commit(); db.refresh(p)
-
+    # Nouveau participant
+    pid = s.add_participant(payload.display_name)
     await manager.broadcast(code, {
         "type": "participant_join",
-        "participant_id": p.id,
-        "display_name": p.display_name,
+        "participant_id": pid,
+        "display_name": payload.display_name,
     })
-    return p
+    return schemas.ParticipantOut(id=pid, display_name=payload.display_name)
 
 
 # ---------------------------------------------------------------------------
-# Routes : Reponses
+# Routes : Réponses (mémoire)
 # ---------------------------------------------------------------------------
 
 @app.post("/sessions/{code}/questions/{question_id}/answer", response_model=schemas.AnswerOut)
 @limiter.limit("30/minute")
-async def submit_answer(request: Request, code: str, question_id: int, payload: schemas.AnswerCreate, db: Session = Depends(get_db)):
-    q = db.query(models.Question).filter_by(id=question_id).first()
+async def submit_answer(request: Request, code: str, question_id: int, payload: schemas.AnswerCreate):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    q = s.questions.get(question_id)
     if not q:
         raise HTTPException(404, "Question introuvable")
     if q.status != "active":
         raise HTTPException(400, "La question n'est pas active")
 
+    # Vérification du timer
     if q.time_limit_seconds and q.started_at:
-        elapsed = (datetime.now(timezone.utc) - q.started_at.replace(tzinfo=timezone.utc)).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - q.started_at).total_seconds()
         if elapsed > q.time_limit_seconds:
-            raise HTTPException(400, "Temps ecoule")
+            raise HTTPException(400, "Temps écoulé")
 
     is_correct = compute_is_correct(payload.selected_choices, q.correct_choices)
-    answer = models.Answer(
-        question_id=question_id,
-        participant_id=payload.participant_id,
-        selected_choices=payload.selected_choices,
-        is_correct=is_correct,
-    )
-    db.add(answer); db.commit(); db.refresh(answer)
+    display_name = s.participants.get(payload.participant_id, "Anonyme")
+
+    # Stockage en mémoire (écrase si le participant répond à nouveau)
+    q.answers[payload.participant_id] = {
+        "selected_choices": payload.selected_choices,
+        "is_correct": is_correct,
+        "display_name": display_name,
+    }
 
     await manager.broadcast(code, {
         "type": "answer_received",
         "question_id": question_id,
         "total_answers": len(q.answers),
     })
-    return answer
+    return schemas.AnswerOut(
+        participant_id=payload.participant_id,
+        selected_choices=payload.selected_choices,
+        is_correct=is_correct,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -256,7 +342,7 @@ async def websocket_endpoint(websocket: WebSocket, session_code: str):
 
 
 # ---------------------------------------------------------------------------
-# Fichiers statiques (front) - monte en dernier
+# Fichiers statiques (front) - monté en dernier
 # ---------------------------------------------------------------------------
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

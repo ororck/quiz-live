@@ -16,27 +16,35 @@ class QuestionBankOut(BaseModel):
     text: str
     num_choices: int
     choices_text: list[str]
+    correct_choices: list[int]
     time_limit_seconds: int | None
     category: str | None
 
     model_config = {"from_attributes": True}
 
 
-# --- Session ---
+# --- Session (mémoire) ---
 
 class SessionCreate(BaseModel):
     mode: str = "live"  # live | solo
 
 class SessionOut(BaseModel):
-    id: int
     code: str
     mode: str
-    status: str
-
-    model_config = {"from_attributes": True}
+    status: str  # waiting | active | ended
 
 
-# --- Question ---
+# --- Participant (mémoire) ---
+
+class ParticipantCreate(BaseModel):
+    display_name: str
+
+class ParticipantOut(BaseModel):
+    id: int
+    display_name: str
+
+
+# --- Question live (mémoire) ---
 
 class QuestionCreate(BaseModel):
     order_index: int
@@ -49,42 +57,26 @@ class QuestionOut(BaseModel):
     id: int
     order_index: int
     num_choices: int
+    correct_choices: list[int]
     time_limit_seconds: int | None
     started_at: str | None
-    status: str
+    status: str  # pending | active | revealed
     bank_question_id: int | None
 
-    model_config = {"from_attributes": True}
 
-
-# --- Participant ---
-
-class ParticipantCreate(BaseModel):
-    display_name: str
-
-class ParticipantOut(BaseModel):
-    id: int
-    display_name: str
-
-    model_config = {"from_attributes": True}
-
-
-# --- Answer ---
+# --- Réponse (mémoire) ---
 
 class AnswerCreate(BaseModel):
     participant_id: int
     selected_choices: list[int]
 
 class AnswerOut(BaseModel):
-    id: int
     participant_id: int
     selected_choices: list[int]
     is_correct: bool
 
-    model_config = {"from_attributes": True}
 
-
-# --- Stats ---
+# --- Stats révélation ---
 
 class ParticipantResult(BaseModel):
     display_name: str
@@ -95,5 +87,5 @@ class QuestionStats(BaseModel):
     question_id: int
     total_answers: int
     correct_count: int
-    choices_breakdown: dict[int, int]  # ex: {0: 5, 1: 2} -> combien ont choisi chaque index
+    choices_breakdown: dict[int, int]
     results: list[ParticipantResult]
