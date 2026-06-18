@@ -26,21 +26,3 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-
-# Copie les dépendances installées depuis le stage builder
-COPY --from=builder /install /usr/local
-
-# Copie le code de l'application
-COPY app/ ./app/
-COPY static/ ./static/
-
-# Variable d'environnement pour que Python n'écrive pas de .pyc
-# et affiche les logs directement (pas de buffer)
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Port exposé (documentaire, pas obligatoire)
-EXPOSE 8000
-
-# Commande de démarrage
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
