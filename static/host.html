@@ -561,6 +561,7 @@ function connectWS() {
 // ------- PARTICIPANTS -------
 
 function addParticipant(data) {
+  if (participants.find(p => p.participant_id === data.participant_id)) return;
   participants.push(data);
   const count = document.getElementById('participant-count');
   count.textContent = participants.length;
