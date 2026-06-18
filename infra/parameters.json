@@ -7,6 +7,9 @@
     },
     "dockerImage": {
       "value": "ororck/quiz-live:latest"
+    },
+    "storageAccountName": {
+      "value": "quizlivestore3268"
     }
   }
 }
