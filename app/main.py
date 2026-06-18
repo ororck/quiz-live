@@ -188,6 +188,11 @@ async def join_session(request: Request, code: str, payload: schemas.Participant
         display_name=payload.display_name
     ).first()
     if existing:
+        await manager.broadcast(code, {
+           "type": "participant_join",
+           "participant_id": existing.id,
+           "display_name": existing.display_name,
+    })
         return existing
 
     p = models.Participant(session_id=session.id, display_name=payload.display_name)
