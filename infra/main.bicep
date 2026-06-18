@@ -25,10 +25,6 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2023-05-01' = {
   name: '${appName}-env'
   location: location
   properties: {
-    // Declare le File Share dans l'environnement Container Apps
-    appLogsConfiguration: {
-      destination: 'none'
-    }
   }
 }
 
