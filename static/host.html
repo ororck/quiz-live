@@ -528,8 +528,6 @@ async function createSession(mode) {
   document.getElementById('session-screen').style.flexDirection = 'column';
   document.getElementById('qr-panel').style.display = 'block';
   document.getElementById('btn-end').style.display = 'block';
-  document.getElementById('history-panel').style.display = 'block';
-
   const joinUrl = `${window.location.origin}/student.html?session=${sessionCode}`;
   document.getElementById('sidebar-code').textContent = sessionCode;
   document.getElementById('join-url-text').textContent = joinUrl;
@@ -548,8 +546,8 @@ document.getElementById('qr-canvas').replaceWith(img);
 // ------- WEBSOCKET -------
 
 function connectWS() {
-  ws = new WebSocket(`ws://${window.location.host}/ws/${sessionCode}`);
-  ws.onmessage = (e) => {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${sessionCode}`);  ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === 'participant_join') {
       addParticipant(msg);
@@ -609,8 +607,6 @@ async function launchQuestion() {
   document.getElementById('active-q-label').textContent = `Question #${questionIndex}`;
   document.getElementById('answer-count-num').textContent = '0';
 
-  addToHistory(q, 'active');
-
   if (timerSec) startTimerDisplay(timerSec);
 }
 
@@ -640,7 +636,6 @@ async function revealQuestion() {
   });
   const stats = await res.json();
   showStats(stats);
-  updateHistory(currentQuestion.id, 'revealed');
 }
 
 function showStats(stats) {
@@ -716,30 +711,6 @@ function nextQuestion() {
 }
 
 // ------- HISTORIQUE -------
-
-function addToHistory(q, status) {
-  questionHistory.push({ id: q.id, index: questionIndex, status });
-  renderHistory();
-}
-
-function updateHistory(qId, status) {
-  const entry = questionHistory.find(h => h.id === qId);
-  if (entry) entry.status = status;
-  renderHistory();
-}
-
-function renderHistory() {
-  const container = document.getElementById('question-history');
-  container.innerHTML = '';
-  [...questionHistory].reverse().forEach(h => {
-    const div = document.createElement('div');
-    div.className = 'history-item';
-    div.innerHTML = `
-      <span class="q-num">Q${h.index}</span>
-      <span class="history-status status-${h.status}">${h.status}</span>`;
-    container.appendChild(div);
-  });
-}
 renderChoicesGrid();
 
   function endSession() {
