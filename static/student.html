@@ -477,7 +477,8 @@ async function loadSoloQuestion() {
 // ------- WEBSOCKET -------
 
 function connectWS() {
-  ws = new WebSocket(`ws://${window.location.host}/ws/${sessionCode}`);
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${sessionCode}`);
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === 'question_start') {
