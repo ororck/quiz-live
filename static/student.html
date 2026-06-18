@@ -211,6 +211,7 @@
   .mode-icon { font-size: 2rem; }
   .mode-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
   .mode-info p { font-size: 0.82rem; color: var(--muted); }
+  .selected-theme { border-color: var(--accent) !important; background: rgba(124,106,255,0.08); }
 </style>
 </head>
 <body>
@@ -269,8 +270,36 @@
       <input type="text" id="solo-name-input" placeholder="Mohamed" maxlength="24">
     </div>
     <div class="field">
-      <label>Catégorie (optionnel)</label>
-      <input type="text" id="solo-category-input" placeholder="Azure, Linux, Réseau…">
+      <label>Thème</label>
+      <div class="mode-cards" id="theme-cards">
+        <div class="mode-card theme-card selected-theme" data-theme="az-900" onclick="selectTheme(this)">
+          <div class="mode-icon">☁️</div>
+          <div class="mode-info">
+            <h3>AZ-900</h3>
+            <p>Azure Fundamentals — 484 questions</p>
+          </div>
+        </div>
+        <div class="mode-card theme-card" data-theme="az-104" onclick="selectTheme(this)">
+          <div class="mode-icon">⚙️</div>
+          <div class="mode-info">
+            <h3>AZ-104</h3>
+            <p>Azure Administrator — bientôt disponible</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Mode</label>
+      <div style="display:flex;gap:10px;">
+        <div class="mode-card" id="mode-chrono" style="flex:1;padding:14px;" onclick="selectTimerMode(true)">
+          <div class="mode-icon" style="font-size:1.4rem;">⏱️</div>
+          <div class="mode-info"><h3 style="font-size:0.9rem;">Avec chrono</h3></div>
+        </div>
+        <div class="mode-card selected-theme" id="mode-libre" style="flex:1;padding:14px;" onclick="selectTimerMode(false)">
+          <div class="mode-icon" style="font-size:1.4rem;">🧘</div>
+          <div class="mode-info"><h3 style="font-size:0.9rem;">Sans chrono</h3></div>
+        </div>
+      </div>
     </div>
     <button class="btn btn-primary" onclick="startSolo()">Commencer →</button>
     <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
@@ -299,6 +328,8 @@
     <div class="timer-bar-wrap" id="timer-bar-wrap" style="display:none">
       <div class="timer-bar" id="timer-bar" style="width:100%"></div>
     </div>
+    <!-- Texte de la question (solo uniquement) -->
+    <p id="q-text" style="display:none;font-size:0.95rem;line-height:1.6;color:var(--text);font-weight:500;"></p>
     <div class="choices-grid" id="choices-grid"></div>
     <div class="confirm-row" id="confirm-row" style="display:none">
       <button class="btn btn-ghost" onclick="clearSelection()">Effacer</button>
@@ -406,11 +437,34 @@ async function joinSession() {
 
 // ------- SOLO -------
 
+let soloTimerEnabled = false;  // true = avec chrono, false = sans
+let soloTheme = 'az-900';      // thème sélectionné
+
+function selectTheme(el) {
+  document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected-theme'));
+  el.classList.add('selected-theme');
+  soloTheme = el.dataset.theme;
+}
+
+function selectTimerMode(withTimer) {
+  soloTimerEnabled = withTimer;
+  document.getElementById('mode-chrono').classList.toggle('selected-theme', withTimer);
+  document.getElementById('mode-libre').classList.toggle('selected-theme', !withTimer);
+}
+
+function shuffle(arr) {
+  // Fisher-Yates : mélange aléatoire
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
 async function startSolo() {
   const name = document.getElementById('solo-name-input').value.trim() || 'Joueur';
-  const category = document.getElementById('solo-category-input').value.trim();
 
-  // creer session solo
+  // Créer session solo en mémoire
   const sRes = await fetch(`${API}/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -419,7 +473,7 @@ async function startSolo() {
   const session = await sRes.json();
   sessionCode = session.code;
 
-  // rejoindre
+  // Rejoindre
   const pRes = await fetch(`${API}/sessions/${sessionCode}/join`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -429,10 +483,9 @@ async function startSolo() {
   participantId = participant.id;
   mode = 'solo';
 
-  // charger les questions de la banque
-  const url = category ? `${API}/bank/questions?category=${encodeURIComponent(category)}` : `${API}/bank/questions`;
-  const qRes = await fetch(url);
-  soloQuestions = await qRes.json();
+  // Charger et mélanger les questions du thème
+  const qRes = await fetch(`${API}/bank/questions?category=${encodeURIComponent(soloTheme)}`);
+  soloQuestions = shuffle(await qRes.json());
 
   if (soloQuestions.length === 0) {
     alert('Aucune question disponible pour cette catégorie.');
@@ -453,25 +506,33 @@ async function loadSoloQuestion() {
 
   const bq = soloQuestions[soloIndex];
 
-  // creer la question dans la session
+  // Chrono : 30s si mode chrono activé, sinon on respecte le time_limit_seconds de la banque (peut être null)
+  const timeLimitSec = soloTimerEnabled ? (bq.time_limit_seconds || 30) : null;
+
+  // Créer la question dans la session mémoire
   const res = await fetch(`${API}/sessions/${sessionCode}/questions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       order_index: soloIndex + 1,
       num_choices: bq.num_choices,
-      correct_choices: [],  // on envoie vide, le serveur a deja les vraies dans bank
-      time_limit_seconds: bq.time_limit_seconds,
+      correct_choices: bq.correct_choices,
+      time_limit_seconds: timeLimitSec,
       bank_question_id: bq.id,
     })
   });
   const q = await res.json();
 
-  // start
   await fetch(`${API}/sessions/${sessionCode}/questions/${q.id}/start`, { method: 'POST' });
 
   currentQuestion = { ...q, correct_choices_real: bq.correct_choices };
-  renderQuestion(bq.num_choices, bq.time_limit_seconds, soloIndex + 1, bq.choices_text);
+
+  // Afficher le texte de la question
+  const qText = document.getElementById('q-text');
+  qText.textContent = bq.text;
+  qText.style.display = 'block';
+
+  renderQuestion(bq.num_choices, timeLimitSec, soloIndex + 1, bq.choices_text);
 }
 
 // ------- WEBSOCKET -------
@@ -483,6 +544,7 @@ function connectWS() {
     const msg = JSON.parse(e.data);
     if (msg.type === 'question_start') {
       currentQuestion = msg;
+      document.getElementById('q-text').style.display = 'none'; // pas de texte en live
       renderQuestion(msg.num_choices, msg.time_limit_seconds, msg.order_index, null);
       showScreen('screen-question');
     } else if (msg.type === 'question_reveal') {
