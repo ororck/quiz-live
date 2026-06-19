@@ -37,7 +37,6 @@
   .screen { display: none; width: 100%; max-width: 480px; flex-direction: column; gap: 20px; }
   .screen.active { display: flex; }
 
-  /* LOGO */
   .logo {
     font-family: var(--mono);
     font-size: 0.85rem;
@@ -47,7 +46,6 @@
     margin-bottom: 8px;
   }
 
-  /* CARD */
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -58,7 +56,6 @@
   h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; }
   p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
 
-  /* INPUT */
   .field { display: flex; flex-direction: column; gap: 8px; }
   label { font-size: 0.82rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
   input[type="text"] {
@@ -75,7 +72,6 @@
   }
   input[type="text"]:focus { border-color: var(--accent); }
 
-  /* BUTTONS */
   .btn {
     font-family: var(--sans);
     font-size: 1rem;
@@ -91,8 +87,9 @@
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { opacity: 0.88; }
   .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+  .btn-confirm { background: var(--green); color: #000; font-weight: 700; }
 
-  /* WAITING */
   .waiting-icon {
     font-size: 3rem;
     text-align: center;
@@ -107,6 +104,31 @@
     color: var(--accent);
     text-align: center;
     letter-spacing: 4px;
+  }
+
+  /* SCORE CONTINU */
+  .score-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .score-bar-item { text-align: center; }
+  .score-bar-num {
+    font-family: var(--mono);
+    font-size: 1.3rem;
+    font-weight: 700;
+  }
+  .score-bar-label { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+  .score-pct {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
   }
 
   /* TIMER */
@@ -134,7 +156,7 @@
   }
   .timer-label.urgent { color: var(--red); }
 
-  /* CHOIX BUTTONS */
+  /* CHOIX */
   .choices-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -163,36 +185,53 @@
   .choice-btn.wrong { border-color: var(--red); background: rgba(255,92,92,0.08); color: var(--red); opacity: 0.6; }
   .choice-btn:disabled { cursor: not-allowed; }
 
-  /* CONFIRM */
-  .confirm-row {
-    display: flex;
-    gap: 10px;
-  }
+  .confirm-row { display: flex; gap: 10px; }
   .confirm-row .btn { flex: 1; }
-  .btn-confirm { background: var(--green); color: #000; font-weight: 700; }
 
-  /* RESULT */
   .result-icon { font-size: 4rem; text-align: center; }
   .result-title { font-size: 1.6rem; font-weight: 700; text-align: center; }
   .result-title.correct-text { color: var(--green); }
   .result-title.wrong-text { color: var(--red); }
   .result-sub { text-align: center; color: var(--muted); font-size: 0.9rem; }
 
-  /* SCORE */
   .score-row {
     display: flex;
     justify-content: space-around;
     padding: 16px 0;
   }
   .score-item { text-align: center; }
-  .score-num {
-    font-family: var(--mono);
-    font-size: 2rem;
-    font-weight: 700;
-  }
+  .score-num { font-family: var(--mono); font-size: 2rem; font-weight: 700; }
   .score-num.green { color: var(--green); }
   .score-num.red { color: var(--red); }
   .score-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+  /* RECAP */
+  .recap-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+  }
+  .recap-item .q-text { color: var(--text); margin-bottom: 6px; line-height: 1.5; }
+  .recap-item .correct-ans { color: var(--green); font-size: 0.8rem; }
+
+  /* PROMPT IA */
+  .prompt-box {
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
 
   /* SOLO MODE */
   .mode-cards { display: flex; flex-direction: column; gap: 12px; }
@@ -212,6 +251,18 @@
   .mode-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
   .mode-info p { font-size: 0.82rem; color: var(--muted); }
   .selected-theme { border-color: var(--accent) !important; background: rgba(124,106,255,0.08); }
+
+  .copy-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: var(--sans);
+    font-weight: 600;
+  }
 </style>
 </head>
 <body>
@@ -260,7 +311,7 @@
   </div>
 </div>
 
-<!-- SCREEN 3 : SOLO CATEGORIES -->
+<!-- SCREEN 3 : SOLO -->
 <div class="screen" id="screen-solo">
   <div class="logo">QUIZ_LIVE</div>
   <div class="card" style="gap:16px;display:flex;flex-direction:column;">
@@ -301,6 +352,10 @@
         </div>
       </div>
     </div>
+    <div class="field" style="flex-direction:row;align-items:center;justify-content:space-between;">
+      <label style="margin:0;">Ignorer les questions déjà vues</label>
+      <input type="checkbox" id="skip-seen" style="width:auto;transform:scale(1.4);" checked>
+    </div>
     <button class="btn btn-primary" onclick="startSolo()">Commencer →</button>
     <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
   </div>
@@ -320,6 +375,20 @@
 <!-- SCREEN 5 : QUESTION -->
 <div class="screen" id="screen-question">
   <div class="logo">QUIZ_LIVE</div>
+
+  <!-- Score continu (solo uniquement) -->
+  <div class="score-bar" id="solo-score-bar" style="display:none;">
+    <div class="score-bar-item">
+      <div class="score-bar-num green" id="sb-correct">0</div>
+      <div class="score-bar-label">BONNES</div>
+    </div>
+    <div class="score-pct" id="sb-pct">–</div>
+    <div class="score-bar-item">
+      <div class="score-bar-num red" id="sb-wrong">0</div>
+      <div class="score-bar-label">FAUSSES</div>
+    </div>
+  </div>
+
   <div class="card" style="gap:16px;display:flex;flex-direction:column;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <span style="font-family:var(--mono);font-size:0.75rem;color:var(--muted)" id="q-counter">Q1</span>
@@ -328,18 +397,21 @@
     <div class="timer-bar-wrap" id="timer-bar-wrap" style="display:none">
       <div class="timer-bar" id="timer-bar" style="width:100%"></div>
     </div>
-    <!-- Texte de la question (solo uniquement) -->
     <p id="q-text" style="display:none;font-size:0.95rem;line-height:1.6;color:var(--text);font-weight:500;"></p>
     <div class="choices-grid" id="choices-grid"></div>
+    <!-- Bouton valider uniquement pour les questions multi-choix -->
     <div class="confirm-row" id="confirm-row" style="display:none">
       <button class="btn btn-ghost" onclick="clearSelection()">Effacer</button>
       <button class="btn btn-confirm" onclick="submitAnswer()">Valider ✓</button>
     </div>
     <p style="text-align:center;font-size:0.8rem" id="q-hint">Sélectionne ta réponse</p>
   </div>
+
+  <!-- Bouton stop session solo -->
+  <button class="btn btn-danger" id="btn-stop-solo" style="display:none;" onclick="stopSolo()">⏹ Arrêter et voir le récap</button>
 </div>
 
-<!-- SCREEN 6 : RESULTAT QUESTION -->
+<!-- SCREEN 6 : RESULTAT QUESTION (live uniquement) -->
 <div class="screen" id="screen-result">
   <div class="logo">QUIZ_LIVE</div>
   <div class="card" style="gap:12px;display:flex;flex-direction:column;align-items:center;">
@@ -366,6 +438,46 @@
   <p style="text-align:center;color:var(--muted);font-size:0.85rem" id="next-hint">En attente de la prochaine question…</p>
 </div>
 
+<!-- SCREEN 7 : RECAP FINAL SOLO -->
+<div class="screen" id="screen-recap">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:12px;display:flex;flex-direction:column;">
+    <h2>🏁 Récap de session</h2>
+    <div class="score-row" style="padding:8px 0;">
+      <div class="score-item">
+        <div class="score-num green" id="recap-correct">0</div>
+        <div class="score-label">BONNES</div>
+      </div>
+      <div class="score-item">
+        <div class="score-pct" id="recap-pct" style="font-size:2rem;">–</div>
+        <div class="score-label">SCORE</div>
+      </div>
+      <div class="score-item">
+        <div class="score-num red" id="recap-wrong">0</div>
+        <div class="score-label">FAUSSES</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Questions ratées -->
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;" id="recap-wrong-section">
+    <h2 style="font-size:1rem;">❌ Questions à retravailler</h2>
+    <div id="recap-wrong-list"></div>
+  </div>
+
+  <!-- Prompt IA -->
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;" id="recap-prompt-section" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="font-size:1rem;">🤖 Prompt pour Claude / ChatGPT</h2>
+      <button class="copy-btn" onclick="copyPrompt()">Copier</button>
+    </div>
+    <div class="prompt-box" id="recap-prompt"></div>
+  </div>
+
+  <button class="btn btn-primary" onclick="showScreen('screen-solo')">Nouvelle session →</button>
+  <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour à l'accueil</button>
+</div>
+
 <script>
 const API = '';
 const letters = ['A','B','C','D','E','F'];
@@ -384,6 +496,9 @@ let mode = 'live';
 // Solo
 let soloQuestions = [];
 let soloIndex = 0;
+let soloTimerEnabled = false;
+let soloTheme = 'az-900';
+let wrongAnswers = []; // {text, correctLabels}
 
 // ------- NAVIGATION -------
 
@@ -393,7 +508,6 @@ function showScreen(id) {
 }
 
 function showJoin() {
-  // pre-remplir le code si dans l'URL
   const params = new URLSearchParams(window.location.search);
   if (params.get('session')) {
     document.getElementById('session-code-input').value = params.get('session').toUpperCase();
@@ -401,11 +515,8 @@ function showJoin() {
   showScreen('screen-join');
 }
 
-function showSolo() {
-  showScreen('screen-solo');
-}
+function showSolo() { showScreen('screen-solo'); }
 
-// auto-redirect si ?session= dans l'URL
 window.onload = () => {
   const params = new URLSearchParams(window.location.search);
   if (params.get('session')) showJoin();
@@ -437,9 +548,6 @@ async function joinSession() {
 
 // ------- SOLO -------
 
-let soloTimerEnabled = false;  // true = avec chrono, false = sans
-let soloTheme = 'az-900';      // thème sélectionné
-
 function selectTheme(el) {
   document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected-theme'));
   el.classList.add('selected-theme');
@@ -453,7 +561,6 @@ function selectTimerMode(withTimer) {
 }
 
 function shuffle(arr) {
-  // Fisher-Yates : mélange aléatoire
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
@@ -461,10 +568,23 @@ function shuffle(arr) {
   return arr;
 }
 
+// Récupère les IDs de questions déjà vues depuis localStorage
+function getSeenIds(theme) {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(`seen_${theme}`) || '[]'));
+  } catch { return new Set(); }
+}
+
+function markSeen(theme, id) {
+  const seen = getSeenIds(theme);
+  seen.add(id);
+  localStorage.setItem(`seen_${theme}`, JSON.stringify([...seen]));
+}
+
 async function startSolo() {
   const name = document.getElementById('solo-name-input').value.trim() || 'Joueur';
+  const skipSeen = document.getElementById('skip-seen').checked;
 
-  // Créer session solo en mémoire
   const sRes = await fetch(`${API}/sessions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -473,7 +593,6 @@ async function startSolo() {
   const session = await sRes.json();
   sessionCode = session.code;
 
-  // Rejoindre
   const pRes = await fetch(`${API}/sessions/${sessionCode}/join`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -483,9 +602,21 @@ async function startSolo() {
   participantId = participant.id;
   mode = 'solo';
 
-  // Charger et mélanger les questions du thème
   const qRes = await fetch(`${API}/bank/questions?category=${encodeURIComponent(soloTheme)}`);
-  soloQuestions = shuffle(await qRes.json());
+  let questions = await qRes.json();
+
+  // Filtrer les questions déjà vues si option cochée
+  if (skipSeen) {
+    const seen = getSeenIds(soloTheme);
+    const unseen = questions.filter(q => !seen.has(q.id));
+    // Si toutes vues, on repart de zéro
+    questions = unseen.length > 0 ? unseen : questions;
+    if (unseen.length === 0) {
+      localStorage.removeItem(`seen_${soloTheme}`);
+    }
+  }
+
+  soloQuestions = shuffle(questions);
 
   if (soloQuestions.length === 0) {
     alert('Aucune question disponible pour cette catégorie.');
@@ -495,21 +626,37 @@ async function startSolo() {
   soloIndex = 0;
   scoreCorrect = 0;
   scoreTotal = 0;
+  wrongAnswers = [];
+
+  // Afficher score bar et bouton stop
+  document.getElementById('solo-score-bar').style.display = 'flex';
+  document.getElementById('btn-stop-solo').style.display = 'block';
+  updateScoreBar();
+
   await loadSoloQuestion();
+}
+
+function updateScoreBar() {
+  document.getElementById('sb-correct').textContent = scoreCorrect;
+  document.getElementById('sb-wrong').textContent = scoreTotal - scoreCorrect;
+  const pct = scoreTotal > 0 ? Math.round((scoreCorrect / scoreTotal) * 100) : '–';
+  document.getElementById('sb-pct').textContent = scoreTotal > 0 ? pct + '%' : '–';
+}
+
+function stopSolo() {
+  clearInterval(timerInterval);
+  showRecap();
 }
 
 async function loadSoloQuestion() {
   if (soloIndex >= soloQuestions.length) {
-    showFinalScore();
+    showRecap();
     return;
   }
 
   const bq = soloQuestions[soloIndex];
-
-  // Chrono : 30s si mode chrono activé, sinon on respecte le time_limit_seconds de la banque (peut être null)
   const timeLimitSec = soloTimerEnabled ? (bq.time_limit_seconds || 30) : null;
 
-  // Créer la question dans la session mémoire
   const res = await fetch(`${API}/sessions/${sessionCode}/questions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -522,17 +669,15 @@ async function loadSoloQuestion() {
     })
   });
   const q = await res.json();
-
   await fetch(`${API}/sessions/${sessionCode}/questions/${q.id}/start`, { method: 'POST' });
 
-  currentQuestion = { ...q, correct_choices_real: bq.correct_choices };
+  currentQuestion = { ...q, correct_choices_real: bq.correct_choices, bank_question: bq };
 
-  // Afficher le texte de la question
   const qText = document.getElementById('q-text');
   qText.textContent = bq.text;
   qText.style.display = 'block';
 
-  renderQuestion(bq.num_choices, timeLimitSec, soloIndex + 1, bq.choices_text);
+  renderQuestion(bq.num_choices, timeLimitSec, soloIndex + 1, bq.choices_text, bq.correct_choices.length);
 }
 
 // ------- WEBSOCKET -------
@@ -544,8 +689,8 @@ function connectWS() {
     const msg = JSON.parse(e.data);
     if (msg.type === 'question_start') {
       currentQuestion = msg;
-      document.getElementById('q-text').style.display = 'none'; // pas de texte en live
-      renderQuestion(msg.num_choices, msg.time_limit_seconds, msg.order_index, null);
+      document.getElementById('q-text').style.display = 'none';
+      renderQuestion(msg.num_choices, msg.time_limit_seconds, msg.order_index, null, 1);
       showScreen('screen-question');
     } else if (msg.type === 'question_reveal') {
       showResultFromReveal(msg);
@@ -555,28 +700,40 @@ function connectWS() {
 
 // ------- QUESTION -------
 
-function renderQuestion(numChoices, timeLimitSec, orderIndex, choicesText) {
+function renderQuestion(numChoices, timeLimitSec, orderIndex, choicesText, numCorrect) {
   selectedChoices.clear();
   clearInterval(timerInterval);
 
   document.getElementById('q-counter').textContent = `Q${orderIndex}`;
   document.getElementById('confirm-row').style.display = 'none';
-  document.getElementById('q-hint').textContent = 'Sélectionne ta réponse';
+  document.getElementById('q-hint').textContent = numCorrect > 1 ? 'Plusieurs bonnes réponses possibles' : 'Sélectionne ta réponse';
 
-  // grille de choix
   const grid = document.getElementById('choices-grid');
   grid.innerHTML = '';
+
   for (let i = 0; i < numChoices; i++) {
     const btn = document.createElement('button');
     btn.className = 'choice-btn';
     btn.dataset.index = i;
     btn.textContent = choicesText ? choicesText[i] : letters[i];
-    if (choicesText) { btn.style.fontSize = '1rem'; btn.style.aspectRatio = 'auto'; btn.style.padding = '16px'; }
-    btn.onclick = () => toggleChoice(i, btn);
+    if (choicesText) {
+      btn.style.fontSize = '0.9rem';
+      btn.style.aspectRatio = 'auto';
+      btn.style.padding = '16px';
+      btn.style.textAlign = 'left';
+      btn.style.justifyContent = 'flex-start';
+    }
+
+    if (mode === 'solo' && numCorrect === 1) {
+      // Choix unique : clic direct = valide immédiatement
+      btn.onclick = () => selectAndSubmit(i, btn);
+    } else {
+      // Multi-choix : sélection puis bouton Valider
+      btn.onclick = () => toggleChoice(i, btn);
+    }
     grid.appendChild(btn);
   }
 
-  // timer
   if (timeLimitSec) {
     timerTotal = timeLimitSec;
     document.getElementById('timer-label').style.display = 'block';
@@ -588,6 +745,16 @@ function renderQuestion(numChoices, timeLimitSec, orderIndex, choicesText) {
   }
 
   showScreen('screen-question');
+}
+
+// Clic direct (choix unique solo)
+function selectAndSubmit(i, btn) {
+  if (btn.disabled) return;
+  selectedChoices.clear();
+  selectedChoices.add(i);
+  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  submitAnswer();
 }
 
 function toggleChoice(i, btn) {
@@ -612,18 +779,11 @@ function startTimer(seconds) {
   const label = document.getElementById('timer-label');
   const bar = document.getElementById('timer-bar');
   let remaining = seconds;
-
   const tick = () => {
     label.textContent = remaining + 's';
     bar.style.width = ((remaining / timerTotal) * 100) + '%';
-    if (remaining <= 5) {
-      label.classList.add('urgent');
-      bar.classList.add('urgent');
-    }
-    if (remaining <= 0) {
-      clearInterval(timerInterval);
-      autoSubmit();
-    }
+    if (remaining <= 5) { label.classList.add('urgent'); bar.classList.add('urgent'); }
+    if (remaining <= 0) { clearInterval(timerInterval); autoSubmit(); }
     remaining--;
   };
   tick();
@@ -631,7 +791,7 @@ function startTimer(seconds) {
 }
 
 function autoSubmit() {
-  if (selectedChoices.size === 0) selectedChoices.add(-1); // soumission vide
+  if (selectedChoices.size === 0) selectedChoices.add(-1);
   submitAnswer();
 }
 
@@ -661,33 +821,41 @@ async function submitAnswer() {
   }
 }
 
-// ------- RESULTATS -------
+// ------- RESULTATS SOLO -------
 
 function showResultSolo(answer) {
   scoreTotal++;
   if (answer.is_correct) scoreCorrect++;
 
+  const bq = currentQuestion.bank_question;
   const correct = currentQuestion.correct_choices_real;
 
-  // colorer les boutons
+  // Marquer la question comme vue
+  markSeen(soloTheme, bq.id);
+
+  // Colorer les boutons
   document.querySelectorAll('.choice-btn').forEach(btn => {
     const i = parseInt(btn.dataset.index);
     if (correct.includes(i)) btn.classList.add('correct');
     else if (selectedChoices.has(i)) btn.classList.add('wrong');
   });
 
+  // Stocker les erreurs pour le récap
+  if (!answer.is_correct) {
+    const correctLabels = correct.map(i =>
+      bq.choices_text ? `${letters[i]}) ${bq.choices_text[i]}` : letters[i]
+    );
+    wrongAnswers.push({ text: bq.text, correctLabels });
+  }
+
+  // Mettre à jour le score continu
+  updateScoreBar();
+
+  // Passer à la question suivante après 1.2s
   setTimeout(() => {
-    showResultScreen(answer.is_correct);
-    document.getElementById('next-hint').textContent = '';
-    const nextBtn = document.createElement('button');
-    nextBtn.className = 'btn btn-primary';
-    nextBtn.textContent = soloIndex + 1 < soloQuestions.length ? 'Question suivante →' : 'Voir le score final';
-    nextBtn.onclick = () => {
-      soloIndex++;
-      loadSoloQuestion();
-    };
-    document.getElementById('screen-result').appendChild(nextBtn);
-  }, 800);
+    soloIndex++;
+    loadSoloQuestion();
+  }, 1200);
 }
 
 function showResultFromReveal(msg) {
@@ -708,33 +876,71 @@ function showResultScreen(isCorrect) {
   document.getElementById('score-wrong').textContent = scoreTotal - scoreCorrect;
   document.getElementById('next-hint').textContent = 'En attente de la prochaine question…';
 
-  // enlever bouton solo precedent si present
   const old = document.querySelector('#screen-result .btn');
   if (old) old.remove();
 
   showScreen('screen-result');
 }
 
-function showFinalScore() {
-  document.getElementById('result-icon').textContent = '🏁';
-  document.getElementById('result-title').textContent = 'Quiz terminé !';
-  document.getElementById('result-title').className = 'result-title';
-  document.getElementById('result-sub').textContent = `Score final : ${scoreCorrect} / ${scoreTotal}`;
-  document.getElementById('score-correct').textContent = scoreCorrect;
-  document.getElementById('score-total').textContent = scoreTotal;
-  document.getElementById('score-wrong').textContent = scoreTotal - scoreCorrect;
-  document.getElementById('next-hint').textContent = '';
+// ------- RECAP FINAL -------
 
-  const old = document.querySelector('#screen-result .btn');
-  if (old) old.remove();
-  const btn = document.createElement('button');
-  btn.className = 'btn btn-ghost';
-  btn.textContent = 'Retour à l\'accueil';
-  btn.onclick = () => showScreen('screen-home');
-  document.getElementById('screen-result').appendChild(btn);
+function showRecap() {
+  // Cacher score bar et bouton stop
+  document.getElementById('solo-score-bar').style.display = 'none';
+  document.getElementById('btn-stop-solo').style.display = 'none';
 
-  showScreen('screen-result');
+  const pct = scoreTotal > 0 ? Math.round((scoreCorrect / scoreTotal) * 100) : 0;
+
+  document.getElementById('recap-correct').textContent = scoreCorrect;
+  document.getElementById('recap-wrong').textContent = scoreTotal - scoreCorrect;
+  document.getElementById('recap-pct').textContent = pct + '%';
+
+  // Liste des erreurs
+  const list = document.getElementById('recap-wrong-list');
+  list.innerHTML = '';
+  if (wrongAnswers.length === 0) {
+    list.innerHTML = '<p style="color:var(--green);text-align:center;">🎉 Aucune erreur !</p>';
+  } else {
+    wrongAnswers.forEach((w, idx) => {
+      const div = document.createElement('div');
+      div.className = 'recap-item';
+      div.innerHTML = `
+        <div class="q-text">${idx + 1}. ${w.text}</div>
+        <div class="correct-ans">✓ ${w.correctLabels.join(' / ')}</div>
+      `;
+      list.appendChild(div);
+    });
+  }
+
+  // Générer le prompt IA
+  if (wrongAnswers.length > 0) {
+    const promptText = buildPrompt();
+    document.getElementById('recap-prompt').textContent = promptText;
+    document.getElementById('recap-prompt-section').style.display = 'flex';
+  } else {
+    document.getElementById('recap-prompt-section').style.display = 'none';
+  }
+
+  showScreen('screen-recap');
 }
+
+function buildPrompt() {
+  const lines = wrongAnswers.map((w, i) =>
+    `${i + 1}. "${w.text}"\n   → Bonne réponse : ${w.correctLabels.join(' / ')}`
+  ).join('\n\n');
+
+  return `Je prépare la certification ${soloTheme.toUpperCase()} et j'ai raté ces questions lors d'une session d'entraînement :\n\n${lines}\n\nPour chacune de ces questions, explique-moi :\n1. Pourquoi cette réponse est correcte\n2. Le concept Azure sous-jacent à retenir\n3. Comment ne pas se faire piéger à l'examen`;
+}
+
+function copyPrompt() {
+  const text = document.getElementById('recap-prompt').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = '✓ Copié !';
+    setTimeout(() => btn.textContent = 'Copier', 2000);
+  });
+}
+
 </script>
 </body>
 </html>

@@ -3,7 +3,8 @@ import random
 import string
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
+import os
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request, Header
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -119,8 +120,22 @@ def compute_is_correct(selected: list[int], correct: list[int]) -> bool:
 # Routes : Question Bank (DB persistante)
 # ---------------------------------------------------------------------------
 
+def verify_admin_key(x_api_key: str | None = Header(default=None)):
+    """
+    Vérifie que le header X-Api-Key correspond à ADMIN_API_KEY (variable d'environnement).
+    Si ADMIN_API_KEY n'est pas définie, la route est ouverte (dev local).
+    """
+    admin_key = os.getenv("ADMIN_API_KEY")
+    if admin_key and x_api_key != admin_key:
+        raise HTTPException(status_code=401, detail="Clé API invalide ou manquante")
+
+
 @app.post("/bank/questions", response_model=schemas.QuestionBankOut)
-def create_bank_question(payload: schemas.QuestionBankCreate, db: Session = Depends(get_db)):
+def create_bank_question(
+    payload: schemas.QuestionBankCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key),  # vérifie la clé avant d'accéder à la DB
+):
     q = models.QuestionBank(**payload.model_dump())
     db.add(q); db.commit(); db.refresh(q)
     return q
