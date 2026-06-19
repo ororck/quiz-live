@@ -346,6 +346,33 @@
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* BANK PICKER */
+  #bank-screen { display: none; flex-direction: column; gap: 20px; }
+  .bank-filters { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .bank-filters select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-family: var(--sans); font-size: 0.9rem; cursor: pointer;
+  }
+  .bank-filters select:focus { outline: none; border-color: var(--accent); }
+  #bank-question-list { display: flex; flex-direction: column; gap: 8px; max-height: 420px; overflow-y: auto; }
+  .bank-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 14px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer; transition: border-color 0.15s;
+  }
+  .bank-item:hover { border-color: var(--accent); }
+  .bank-item.selected { border-color: var(--accent); background: rgba(124,106,255,0.08); }
+  .bank-item input[type="checkbox"] { margin-top: 2px; accent-color: var(--accent); flex-shrink: 0; }
+  .bank-item-text { font-size: 0.88rem; line-height: 1.5; color: var(--text); }
+  .bank-item-meta { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); margin-top: 4px; }
+  .bank-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 10px;
+  }
+  .bank-count { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+  .bank-count span { color: var(--accent); }
+  #bank-loading { color: var(--muted); font-size: 0.9rem; padding: 24px 0; text-align: center; }
 </style>
 </head>
 <body>
@@ -364,8 +391,37 @@
     <div id="setup-screen" class="panel">
       <h1>Nouvelle<br><em>session live</em></h1>
       <p>Créez une session, partagez le QR code avec vos participants, puis lancez vos questions une par une.</p>
-      <div style="display:flex;gap:12px;margin-top:8px;">
+      <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="createSession('live')">Démarrer une session live</button>
+        <button class="btn btn-ghost" onclick="openBankPicker()">Créer depuis la banque 📚</button>
+      </div>
+    </div>
+
+    <!-- BANK PICKER -->
+    <div id="bank-screen" class="panel" style="display:none;">
+      <div class="panel-title">SÉLECTION DEPUIS LA BANQUE</div>
+      <div class="bank-filters">
+        <select id="bank-cat">
+          <option value="">-- Toutes catégories --</option>
+          <option value="az-900">AZ-900 (original)</option>
+          <option value="az-900-module-1-mcq">Module 1 — MCQ</option>
+          <option value="az-900-module-1-scenario">Module 1 — Scénario</option>
+          <option value="az-900-module-2-mcq">Module 2 — MCQ</option>
+          <option value="az-900-module-2-scenario">Module 2 — Scénario</option>
+          <option value="az-900-module-3-mcq">Module 3 — MCQ</option>
+          <option value="az-900-module-3-scenario">Module 3 — Scénario</option>
+          <option value="az-900-module-4-mcq">Module 4 — MCQ</option>
+          <option value="az-900-module-4-scenario">Module 4 — Scénario</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="loadBankQuestions()">Charger</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleSelectAll()">Tout sélectionner</button>
+        <button class="btn btn-ghost btn-sm" onclick="closeBankPicker()">Annuler</button>
+      </div>
+      <div id="bank-loading" style="display:none">Chargement…</div>
+      <div id="bank-question-list"></div>
+      <div class="bank-toolbar">
+        <div class="bank-count"><span id="bank-selected-count">0</span> question(s) sélectionnée(s)</div>
+        <button class="btn btn-primary" onclick="launchFromBank()">Lancer la session →</button>
       </div>
     </div>
 
@@ -456,7 +512,7 @@
 </main>
 
 <script>
-const API = '';
+const API = 'https://quiz-live.gentleocean-508dd739.francecentral.azurecontainerapps.io';
 let sessionCode = null;
 let sessionId = null;
 let currentQuestion = null;
@@ -509,6 +565,201 @@ function toggleTimer() {
 }
 
 renderChoicesGrid();
+
+// ------- BANK PICKER -------
+
+let bankQuestions = [];
+let bankSelected = new Set();
+let bankQueue = [];
+
+function openBankPicker() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('bank-screen').style.display = 'flex';
+  document.getElementById('bank-screen').style.flexDirection = 'column';
+}
+
+function closeBankPicker() {
+  document.getElementById('bank-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+  document.getElementById('setup-screen').style.flexDirection = 'column';
+}
+
+async function loadBankQuestions() {
+  const cat = document.getElementById('bank-cat').value;
+  const loading = document.getElementById('bank-loading');
+  const list = document.getElementById('bank-question-list');
+  loading.style.display = 'block';
+  list.innerHTML = '';
+  bankQuestions = [];
+  bankSelected.clear();
+  updateBankCount();
+
+  const url = cat ? `${API}/bank/questions?category=${encodeURIComponent(cat)}` : `${API}/bank/questions`;
+  const res = await fetch(url);
+  bankQuestions = await res.json();
+  loading.style.display = 'none';
+  renderBankList();
+}
+
+function renderBankList() {
+  const list = document.getElementById('bank-question-list');
+  list.innerHTML = '';
+  if (bankQuestions.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:0.9rem;padding:16px 0;">Aucune question trouvée.</div>';
+    return;
+  }
+  bankQuestions.forEach(q => {
+    const item = document.createElement('div');
+    item.className = 'bank-item' + (bankSelected.has(q.id) ? ' selected' : '');
+    item.innerHTML = `
+      <input type="checkbox" ${bankSelected.has(q.id) ? 'checked' : ''} onchange="toggleBankItem(${q.id}, this)">
+      <div>
+        <div class="bank-item-text">${q.question_text}</div>
+        <div class="bank-item-meta">${q.category || ''} · ${q.num_choices} choix · correct: ${(q.correct_choices||[]).map(i=>['A','B','C','D','E','F'][i]).join(', ')}</div>
+      </div>`;
+    item.onclick = (e) => { if (e.target.tagName !== 'INPUT') { const cb = item.querySelector('input'); cb.checked = !cb.checked; toggleBankItem(q.id, cb); } };
+    list.appendChild(item);
+  });
+}
+
+function toggleBankItem(id, cb) {
+  if (cb.checked) bankSelected.add(id);
+  else bankSelected.delete(id);
+  const item = cb.closest('.bank-item');
+  item.classList.toggle('selected', cb.checked);
+  updateBankCount();
+}
+
+function toggleSelectAll() {
+  const allSelected = bankSelected.size === bankQuestions.length;
+  bankSelected.clear();
+  if (!allSelected) bankQuestions.forEach(q => bankSelected.add(q.id));
+  renderBankList();
+  updateBankCount();
+}
+
+function updateBankCount() {
+  document.getElementById('bank-selected-count').textContent = bankSelected.size;
+}
+
+async function launchFromBank() {
+  if (bankSelected.size === 0) {
+    alert('Sélectionne au moins une question.');
+    return;
+  }
+  const btn = document.querySelector('#bank-screen .btn-primary');
+  btn.textContent = 'Création…';
+  btn.disabled = true;
+
+  // 1. Créer la session
+  const res = await fetch(`${API}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'live' })
+  });
+  const data = await res.json();
+  sessionCode = data.code;
+  sessionId = data.id;
+
+  // 2. Préparer la file des questions sélectionnées
+  bankQueue = bankQuestions.filter(q => bankSelected.has(q.id));
+
+  // 3. Afficher l'UI session
+  document.getElementById('nav-code').textContent = sessionCode;
+  document.getElementById('bank-screen').style.display = 'none';
+  document.getElementById('session-screen').style.display = 'flex';
+  document.getElementById('session-screen').style.flexDirection = 'column';
+  document.getElementById('qr-panel').style.display = 'block';
+  document.getElementById('btn-end').style.display = 'block';
+
+  const joinUrl = `${window.location.origin}/student.html?session=${sessionCode}`;
+  document.getElementById('sidebar-code').textContent = sessionCode;
+  document.getElementById('join-url-text').textContent = joinUrl;
+  const img = document.createElement('img');
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}&bgcolor=1a1a24&color=e8e8f0`;
+  img.style.borderRadius = '8px';
+  img.width = 180; img.height = 180;
+  document.getElementById('qr-canvas').replaceWith(img);
+
+  // 4. Remplacer le builder par le mode banque
+  document.getElementById('question-builder').style.display = 'none';
+  renderBankQueue();
+
+  connectWS();
+  btn.textContent = 'Lancer la session →';
+  btn.disabled = false;
+}
+
+function renderBankQueue() {
+  const existing = document.getElementById('bank-queue-panel');
+  if (existing) existing.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'bank-queue-panel';
+  panel.style.cssText = 'display:flex;flex-direction:column;gap:12px;';
+
+  const header = document.createElement('div');
+  header.style.cssText = 'font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;';
+  header.textContent = `FILE — ${bankQueue.length} QUESTION(S)`;
+  panel.appendChild(header);
+
+  if (bankQueue.length === 0) {
+    const done = document.createElement('div');
+    done.style.cssText = 'color:var(--green);font-size:0.9rem;padding:16px 0;';
+    done.textContent = '✓ Toutes les questions ont été lancées.';
+    panel.appendChild(done);
+  } else {
+    const next = bankQueue[0];
+    const card = document.createElement('div');
+    card.style.cssText = 'padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:0.9rem;line-height:1.5;';
+    card.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:0.7rem;margin-bottom:6px;">PROCHAINE QUESTION</div>${next.question_text}<div style="margin-top:8px;font-size:0.75rem;color:var(--muted);font-family:var(--mono);">${next.num_choices} choix · correct: ${(next.correct_choices||[]).map(i=>['A','B','C','D','E','F'][i]).join(', ')}</div>`;
+    panel.appendChild(card);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.textContent = `Lancer (${bankQueue.length} restante(s))`;
+    btn.onclick = launchNextFromQueue;
+    panel.appendChild(btn);
+  }
+
+  const sessionScreen = document.getElementById('session-screen');
+  sessionScreen.insertBefore(panel, sessionScreen.firstChild.nextSibling);
+}
+
+async function launchNextFromQueue() {
+  if (bankQueue.length === 0) return;
+  const q = bankQueue.shift();
+  questionIndex++;
+
+  // POST la question dans la session
+  const res = await fetch(`${API}/sessions/${sessionCode}/questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      order_index: questionIndex,
+      num_choices: q.num_choices,
+      correct_choices: q.correct_choices,
+      time_limit_seconds: null,
+      question_text: q.question_text,
+    })
+  });
+  const created = await res.json();
+  await fetch(`${API}/sessions/${sessionCode}/questions/${created.id}/start`, { method: 'POST' });
+  currentQuestion = created;
+
+  // Stocker les correct_choices pour showStats
+  selectedCorrect = new Set(q.correct_choices);
+  numChoices = q.num_choices;
+
+  answerCount = 0;
+  document.getElementById('bank-queue-panel').style.display = 'none';
+  document.getElementById('stats-panel').style.display = 'none';
+  document.getElementById('active-question').style.display = 'flex';
+  document.getElementById('active-question').style.flexDirection = 'column';
+  document.getElementById('active-q-label').textContent = `Question #${questionIndex}`;
+  document.getElementById('answer-count-num').textContent = '0';
+  document.getElementById('timer-display').style.display = 'none';
+}
 
 // ------- SESSION -------
 
@@ -707,8 +958,15 @@ function nextQuestion() {
   document.getElementById('active-question').style.display = 'none';
   document.getElementById('timer-display').style.display = 'none';
   document.getElementById('timer-display').classList.remove('urgent');
-  document.getElementById('question-builder').style.display = 'flex';
-  renderChoicesGrid();
+
+  // Mode banque : afficher la file restante
+  if (bankQueue !== undefined && document.getElementById('bank-queue-panel')) {
+    document.getElementById('bank-queue-panel').style.display = 'flex';
+    renderBankQueue();
+  } else {
+    document.getElementById('question-builder').style.display = 'flex';
+    renderChoicesGrid();
+  }
 }
 
 // ------- HISTORIQUE -------
