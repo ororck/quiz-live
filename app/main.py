@@ -32,13 +32,15 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 class QuestionState:
     """État d'une question active dans une session live."""
-    def __init__(self, id, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id):
+    def __init__(self, id, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id, question_text=None, choices_text=None):
         self.id = id
         self.order_index = order_index
         self.num_choices = num_choices
         self.correct_choices = correct_choices
         self.time_limit_seconds = time_limit_seconds
         self.bank_question_id = bank_question_id
+        self.question_text = question_text
+        self.choices_text = choices_text or []
         self.status = "pending"     # pending | active | revealed
         self.started_at = None      # datetime UTC quand la question est lancée
         # Réponses : dict participant_id -> {selected_choices, is_correct, display_name}
@@ -68,10 +70,10 @@ class SessionState:
                 return pid
         return None
 
-    def add_question(self, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id) -> QuestionState:
+    def add_question(self, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id, question_text=None, choices_text=None) -> QuestionState:
         qid = self._next_question_id
         self._next_question_id += 1
-        q = QuestionState(qid, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id)
+        q = QuestionState(qid, order_index, num_choices, correct_choices, time_limit_seconds, bank_question_id, question_text=question_text, choices_text=choices_text)
         self.questions[qid] = q
         return q
 
@@ -188,6 +190,8 @@ def add_question(code: str, payload: schemas.QuestionCreate):
         correct_choices=payload.correct_choices,
         time_limit_seconds=payload.time_limit_seconds,
         bank_question_id=payload.bank_question_id,
+        question_text=getattr(payload, 'question_text', None),
+        choices_text=getattr(payload, 'choices_text', None),
     )
     return schemas.QuestionOut(
         id=q.id, order_index=q.order_index, num_choices=q.num_choices,
@@ -215,6 +219,8 @@ async def start_question(code: str, question_id: int):
         "num_choices": q.num_choices,
         "time_limit_seconds": q.time_limit_seconds,
         "started_at": q.started_at.isoformat(),
+        "question_text": q.question_text,
+        "choices_text": q.choices_text,
     })
     return schemas.QuestionOut(
         id=q.id, order_index=q.order_index, num_choices=q.num_choices,
