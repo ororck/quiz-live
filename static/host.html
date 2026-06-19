@@ -614,7 +614,7 @@ function renderBankList() {
     item.innerHTML = `
       <input type="checkbox" ${bankSelected.has(q.id) ? 'checked' : ''} onchange="toggleBankItem(${q.id}, this)">
       <div>
-        <div class="bank-item-text">${q.question_text}</div>
+        <div class="bank-item-text">${q.text}</div>
         <div class="bank-item-meta">${q.category || ''} · ${q.num_choices} choix · correct: ${(q.correct_choices||[]).map(i=>['A','B','C','D','E','F'][i]).join(', ')}</div>
       </div>`;
     item.onclick = (e) => { if (e.target.tagName !== 'INPUT') { const cb = item.querySelector('input'); cb.checked = !cb.checked; toggleBankItem(q.id, cb); } };
