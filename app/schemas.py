@@ -52,6 +52,8 @@ class QuestionCreate(BaseModel):
     correct_choices: list[int]
     time_limit_seconds: int | None = None
     bank_question_id: int | None = None
+    question_text: str | None = None
+    choices_text: list[str] | None = None
 
 class QuestionOut(BaseModel):
     id: int
@@ -62,6 +64,8 @@ class QuestionOut(BaseModel):
     started_at: str | None
     status: str  # pending | active | revealed
     bank_question_id: int | None
+    question_text: str | None = None
+    choices_text: list[str] | None = None
 
 
 # --- Réponse (mémoire) ---

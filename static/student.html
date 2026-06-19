@@ -785,8 +785,14 @@ function connectWS() {
     const msg = JSON.parse(e.data);
     if (msg.type === 'question_start') {
       currentQuestion = msg;
-      document.getElementById('q-text').style.display = 'none';
-      renderQuestion(msg.num_choices, msg.time_limit_seconds, msg.order_index, null, 1);
+      const qTextEl = document.getElementById('q-text');
+      if (msg.question_text) {
+        qTextEl.textContent = msg.question_text;
+        qTextEl.style.display = 'block';
+      } else {
+        qTextEl.style.display = 'none';
+      }
+      renderQuestion(msg.num_choices, msg.time_limit_seconds, msg.order_index, msg.choices_text || null, 1);
       showScreen('screen-question');
     } else if (msg.type === 'question_reveal') {
       showResultFromReveal(msg);

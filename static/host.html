@@ -712,7 +712,7 @@ function renderBankQueue() {
     const next = bankQueue[0];
     const card = document.createElement('div');
     card.style.cssText = 'padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:0.9rem;line-height:1.5;';
-    card.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:0.7rem;margin-bottom:6px;">PROCHAINE QUESTION</div>${next.question_text}<div style="margin-top:8px;font-size:0.75rem;color:var(--muted);font-family:var(--mono);">${next.num_choices} choix · correct: ${(next.correct_choices||[]).map(i=>['A','B','C','D','E','F'][i]).join(', ')}</div>`;
+    card.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:0.7rem;margin-bottom:6px;">PROCHAINE QUESTION</div>${next.text}<div style="margin-top:8px;font-size:0.75rem;color:var(--muted);font-family:var(--mono);">${next.num_choices} choix · correct: ${(next.correct_choices||[]).map(i=>['A','B','C','D','E','F'][i]).join(', ')}</div>`;
     panel.appendChild(card);
 
     const btn = document.createElement('button');
@@ -740,12 +740,13 @@ async function launchNextFromQueue() {
       num_choices: q.num_choices,
       correct_choices: q.correct_choices,
       time_limit_seconds: null,
-      question_text: q.question_text,
+      question_text: q.text,
+      choices_text: q.choices_text,
     })
   });
   const created = await res.json();
   await fetch(`${API}/sessions/${sessionCode}/questions/${created.id}/start`, { method: 'POST' });
-  currentQuestion = created;
+  currentQuestion = { ...created, text: q.text, choices_text: q.choices_text };
 
   // Stocker les correct_choices pour showStats
   selectedCorrect = new Set(q.correct_choices);
@@ -754,9 +755,28 @@ async function launchNextFromQueue() {
   answerCount = 0;
   document.getElementById('bank-queue-panel').style.display = 'none';
   document.getElementById('stats-panel').style.display = 'none';
-  document.getElementById('active-question').style.display = 'flex';
-  document.getElementById('active-question').style.flexDirection = 'column';
-  document.getElementById('active-q-label').textContent = `Question #${questionIndex}`;
+
+  // Afficher la question en cours côté host
+  const hostQ = document.getElementById('active-question');
+  hostQ.style.display = 'flex';
+  hostQ.style.flexDirection = 'column';
+  document.getElementById('active-q-label').textContent = `Question #${questionIndex} — ${q.text}`;
+
+  // Afficher les choix texte sous le label
+  const existingChoices = document.getElementById('host-choices-display');
+  if (existingChoices) existingChoices.remove();
+  if (q.choices_text && q.choices_text.length) {
+    const letters = ['A','B','C','D','E','F'];
+    const div = document.createElement('div');
+    div.id = 'host-choices-display';
+    div.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:0.85rem;';
+    q.choices_text.forEach((txt, i) => {
+      const isCorrect = q.correct_choices.includes(i);
+      div.innerHTML += `<div style="padding:8px 12px;border-radius:6px;background:var(--bg);border:1px solid ${isCorrect ? 'var(--green)' : 'var(--border)'};color:${isCorrect ? 'var(--green)' : 'var(--text)'};">${letters[i]}. ${txt}</div>`;
+    });
+    hostQ.insertBefore(div, hostQ.querySelector('.answer-count'));
+  }
+
   document.getElementById('answer-count-num').textContent = '0';
   document.getElementById('timer-display').style.display = 'none';
 }
