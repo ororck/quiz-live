@@ -252,6 +252,24 @@
   .mode-info p { font-size: 0.82rem; color: var(--muted); }
   .selected-theme { border-color: var(--accent) !important; background: rgba(124,106,255,0.08); }
 
+  /* MODULE CHIPS */
+  .module-chip {
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .module-chip span { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+  .module-chip small { font-size: 0.72rem; color: var(--muted); }
+  .module-chip:hover { border-color: var(--accent); }
+  .module-chip.selected-chip { border-color: var(--accent); background: rgba(124,106,255,0.08); }
+  .module-chip.selected-chip span { color: var(--accent); }
+
   .copy-btn {
     background: var(--accent);
     color: #fff;
@@ -320,27 +338,63 @@
       <label>Ton prénom</label>
       <input type="text" id="solo-name-input" placeholder="Mohamed" maxlength="24">
     </div>
+
+    <!-- Sélection de la certification -->
     <div class="field">
-      <label>Thème</label>
-      <div class="mode-cards" id="theme-cards">
-        <div class="mode-card theme-card selected-theme" data-theme="az-900" onclick="selectTheme(this)">
-          <div class="mode-icon">☁️</div>
-          <div class="mode-info">
-            <h3>AZ-900</h3>
-            <p>Azure Fundamentals — 484 questions</p>
-          </div>
+      <label>Certification</label>
+      <div style="display:flex;gap:10px;">
+        <div class="mode-card selected-theme" id="cert-az900" style="flex:1;padding:14px;" onclick="selectCert('az-900')">
+          <div class="mode-icon" style="font-size:1.4rem;">☁️</div>
+          <div class="mode-info"><h3 style="font-size:0.9rem;">AZ-900</h3></div>
         </div>
-        <div class="mode-card theme-card" data-theme="az-104" onclick="selectTheme(this)">
-          <div class="mode-icon">⚙️</div>
-          <div class="mode-info">
-            <h3>AZ-104</h3>
-            <p>Azure Administrator — bientôt disponible</p>
-          </div>
+        <div class="mode-card" id="cert-az104" style="flex:1;padding:14px;opacity:0.4;cursor:not-allowed;">
+          <div class="mode-icon" style="font-size:1.4rem;">⚙️</div>
+          <div class="mode-info"><h3 style="font-size:0.9rem;">AZ-104</h3><p style="font-size:0.7rem;">Bientôt</p></div>
         </div>
       </div>
     </div>
+
+    <!-- Sélection des modules -->
     <div class="field">
-      <label>Mode</label>
+      <label>Modules <span style="font-size:0.75rem;color:var(--accent);" id="module-count-label">(0 sélectionné)</span></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="module-grid">
+        <div class="module-chip selected-chip" data-cats='["az-900-module-1-mcq","az-900-module-1-scenario"]' onclick="toggleModule(this)">
+          <span>Module 1</span><small>Cloud Concepts</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-2-mcq","az-900-module-2-scenario"]' onclick="toggleModule(this)">
+          <span>Module 2</span><small>Architecture & Compute</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-3-mcq","az-900-module-3-scenario"]' onclick="toggleModule(this)">
+          <span>Module 3</span><small>Networking</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-4-mcq","az-900-module-4-scenario"]' onclick="toggleModule(this)">
+          <span>Module 4</span><small>Storage</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900"]' onclick="toggleModule(this)" style="grid-column:span 2;">
+          <span>📚 AZ-900 Original</span><small>484 questions</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtre MCQ / Scénario -->
+    <div class="field">
+      <label>Type de questions</label>
+      <div style="display:flex;gap:8px;">
+        <div class="mode-card selected-theme" id="type-all" style="flex:1;padding:12px;" onclick="selectType('all')">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">Tout</h3></div>
+        </div>
+        <div class="mode-card" id="type-mcq" style="flex:1;padding:12px;" onclick="selectType('mcq')">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">MCQ</h3></div>
+        </div>
+        <div class="mode-card" id="type-scenario" style="flex:1;padding:12px;" onclick="selectType('scenario')">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">Scénarios</h3></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode chrono -->
+    <div class="field">
+      <label>Chrono</label>
       <div style="display:flex;gap:10px;">
         <div class="mode-card" id="mode-chrono" style="flex:1;padding:14px;" onclick="selectTimerMode(true)">
           <div class="mode-icon" style="font-size:1.4rem;">⏱️</div>
@@ -352,6 +406,7 @@
         </div>
       </div>
     </div>
+
     <div class="field" style="flex-direction:row;align-items:center;justify-content:space-between;">
       <label style="margin:0;">Ignorer les questions déjà vues</label>
       <input type="checkbox" id="skip-seen" style="width:auto;transform:scale(1.4);" checked>
@@ -498,7 +553,7 @@ let soloQuestions = [];
 let soloIndex = 0;
 let soloTimerEnabled = false;
 let soloTheme = 'az-900';
-let wrongAnswers = []; // {text, correctLabels}
+let wrongAnswers = [];
 
 // ------- NAVIGATION -------
 
@@ -548,10 +603,27 @@ async function joinSession() {
 
 // ------- SOLO -------
 
-function selectTheme(el) {
-  document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected-theme'));
-  el.classList.add('selected-theme');
-  soloTheme = el.dataset.theme;
+let soloQuestionType = 'all'; // all | mcq | scenario
+
+function selectCert(cert) {
+  document.getElementById('cert-az900').classList.toggle('selected-theme', cert === 'az-900');
+}
+
+function toggleModule(el) {
+  el.classList.toggle('selected-chip');
+  updateModuleCount();
+}
+
+function updateModuleCount() {
+  const selected = document.querySelectorAll('.module-chip.selected-chip').length;
+  document.getElementById('module-count-label').textContent = `(${selected} sélectionné${selected > 1 ? 's' : ''})`;
+}
+
+function selectType(type) {
+  soloQuestionType = type;
+  document.getElementById('type-all').classList.toggle('selected-theme', type === 'all');
+  document.getElementById('type-mcq').classList.toggle('selected-theme', type === 'mcq');
+  document.getElementById('type-scenario').classList.toggle('selected-theme', type === 'scenario');
 }
 
 function selectTimerMode(withTimer) {
@@ -568,22 +640,40 @@ function shuffle(arr) {
   return arr;
 }
 
-// Récupère les IDs de questions déjà vues depuis localStorage
-function getSeenIds(theme) {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(`seen_${theme}`) || '[]'));
-  } catch { return new Set(); }
+function getSeenIds(key) {
+  try { return new Set(JSON.parse(localStorage.getItem(`seen_${key}`) || '[]')); }
+  catch { return new Set(); }
 }
 
-function markSeen(theme, id) {
-  const seen = getSeenIds(theme);
+function markSeen(key, id) {
+  const seen = getSeenIds(key);
   seen.add(id);
-  localStorage.setItem(`seen_${theme}`, JSON.stringify([...seen]));
+  localStorage.setItem(`seen_${key}`, JSON.stringify([...seen]));
+}
+
+function getSelectedCategories() {
+  const chips = document.querySelectorAll('.module-chip.selected-chip');
+  const cats = [];
+  chips.forEach(chip => {
+    const chipCats = JSON.parse(chip.dataset.cats);
+    chipCats.forEach(c => {
+      if (soloQuestionType === 'all') cats.push(c);
+      else if (soloQuestionType === 'mcq' && (c.endsWith('-mcq') || c === 'az-900')) cats.push(c);
+      else if (soloQuestionType === 'scenario' && c.endsWith('-scenario')) cats.push(c);
+    });
+  });
+  return [...new Set(cats)];
 }
 
 async function startSolo() {
   const name = document.getElementById('solo-name-input').value.trim() || 'Joueur';
   const skipSeen = document.getElementById('skip-seen').checked;
+  const categories = getSelectedCategories();
+
+  if (categories.length === 0) {
+    alert('Sélectionne au moins un module.');
+    return;
+  }
 
   const sRes = await fetch(`${API}/sessions`, {
     method: 'POST',
@@ -602,24 +692,30 @@ async function startSolo() {
   participantId = participant.id;
   mode = 'solo';
 
-  const qRes = await fetch(`${API}/bank/questions?category=${encodeURIComponent(soloTheme)}`);
-  let questions = await qRes.json();
+  // Charger les questions de toutes les catégories sélectionnées en parallèle
+  const results = await Promise.all(
+    categories.map(cat => fetch(`${API}/bank/questions?category=${encodeURIComponent(cat)}`).then(r => r.json()))
+  );
+  let questions = results.flat();
 
-  // Filtrer les questions déjà vues si option cochée
+  // Dédupliquer par ID
+  const seen_ids = new Map();
+  questions = questions.filter(q => { if (seen_ids.has(q.id)) return false; seen_ids.set(q.id, true); return true; });
+
+  const seenKey = categories.sort().join('+');
+  soloTheme = seenKey;
+
   if (skipSeen) {
-    const seen = getSeenIds(soloTheme);
-    const unseen = questions.filter(q => !seen.has(q.id));
-    // Si toutes vues, on repart de zéro
-    questions = unseen.length > 0 ? unseen : questions;
-    if (unseen.length === 0) {
-      localStorage.removeItem(`seen_${soloTheme}`);
-    }
+    const seenSet = getSeenIds(seenKey);
+    const unseen = questions.filter(q => !seenSet.has(q.id));
+    if (unseen.length === 0) { localStorage.removeItem(`seen_${seenKey}`); }
+    else { questions = unseen; }
   }
 
   soloQuestions = shuffle(questions);
 
   if (soloQuestions.length === 0) {
-    alert('Aucune question disponible pour cette catégorie.');
+    alert('Aucune question disponible pour cette sélection.');
     return;
   }
 
@@ -628,10 +724,10 @@ async function startSolo() {
   scoreTotal = 0;
   wrongAnswers = [];
 
-  // Afficher score bar et bouton stop
   document.getElementById('solo-score-bar').style.display = 'flex';
   document.getElementById('btn-stop-solo').style.display = 'block';
   updateScoreBar();
+  updateModuleCount();
 
   await loadSoloQuestion();
 }
