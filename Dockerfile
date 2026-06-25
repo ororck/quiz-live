@@ -14,10 +14,6 @@ COPY --from=builder /install /usr/local
 COPY app/ .
 COPY static/ ./static/
 
-# Copie la DB pré-remplie dans l'image -- les questions sont embarquées au build
-# Pour ajouter des questions : générer quiz.db en local et rebuilder
-COPY quiz.db ./quiz.db
-
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
