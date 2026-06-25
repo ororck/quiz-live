@@ -15,6 +15,7 @@
     --accent-dim: #3d3475;
     --green: #22d98a;
     --red: #ff5c5c;
+    --orange: #ff9f43;
     --text: #e8e8f0;
     --muted: #6b6b8a;
     --mono: 'Space Mono', monospace;
@@ -102,6 +103,8 @@
   .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
   .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
   .btn-danger { background: var(--red); color: #fff; }
+  .btn-battle { background: var(--orange); color: #000; font-weight: 700; }
+  .btn-battle:hover { opacity: 0.88; }
   .btn-sm { padding: 8px 14px; font-size: 0.85rem; }
 
   /* SESSION ACTIVE */
@@ -373,6 +376,53 @@
   .bank-count { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
   .bank-count span { color: var(--accent); }
   #bank-loading { color: var(--muted); font-size: 0.9rem; padding: 24px 0; text-align: center; }
+
+  /* BATTLE SCREEN */
+  #battle-screen { display: none; flex-direction: column; gap: 20px; }
+  #battle-screen h2 { font-size: 1.4rem; font-weight: 700; }
+  #battle-screen h2 em { color: var(--orange); font-style: normal; }
+  #battle-screen p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+
+  /* BATTLE WAITING (salle d'attente côté host) */
+  #battle-waiting { display: none; flex-direction: column; gap: 20px; }
+  .battle-waiting-header {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  }
+  .battle-badge {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    background: rgba(255,159,67,0.12);
+    color: var(--orange);
+    border: 1px solid var(--orange);
+  }
+  .battle-progress {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--muted);
+    padding: 12px 16px;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .battle-progress span { color: var(--orange); font-size: 1.2rem; }
+
+  /* RANKING TABLE */
+  .ranking-table { display: flex; flex-direction: column; gap: 6px; }
+  .ranking-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: var(--bg); border-radius: 8px;
+    font-size: 0.88rem; border: 1px solid var(--border);
+  }
+  .ranking-row.gold   { border-color: #ffd700; background: rgba(255,215,0,0.06); }
+  .ranking-row.silver { border-color: #c0c0c0; background: rgba(192,192,192,0.06); }
+  .ranking-row.bronze { border-color: #cd7f32; background: rgba(205,127,50,0.06); }
+  .ranking-pos { font-family: var(--mono); font-size: 1.1rem; width: 32px; }
+  .ranking-name { flex: 1; margin: 0 10px; font-weight: 600; }
+  .ranking-score { font-family: var(--mono); color: var(--green); }
+  .ranking-time { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); margin-left: 8px; }
 </style>
 </head>
 <body>
@@ -394,10 +444,11 @@
       <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="createSession('live')">Démarrer une session live</button>
         <button class="btn btn-ghost" onclick="openBankPicker()">Créer depuis la banque 📚</button>
+        <button class="btn btn-battle" onclick="openBattlePicker()">⚔️ Mode Battle</button>
       </div>
     </div>
 
-    <!-- BANK PICKER -->
+    <!-- BANK PICKER (mode live) -->
     <div id="bank-screen" class="panel" style="display:none;">
       <div class="panel-title">SÉLECTION DEPUIS LA BANQUE</div>
       <div class="bank-filters">
@@ -425,8 +476,86 @@
       </div>
     </div>
 
-    <!-- SESSION ACTIVE -->
-    <div id="session-screen" class="panel">
+    <!-- BATTLE PICKER -->
+    <div id="battle-screen" class="panel" style="display:none;">
+      <div class="panel-title">⚔️ MODE BATTLE</div>
+      <h2>Créer une session <em>Battle</em></h2>
+      <p>Chaque joueur avance à son rythme sur le même set de questions. Classement final par score, puis par temps.</p>
+
+      <!-- Sélection des questions (même filtre que le live) -->
+      <div class="bank-filters" style="margin-top:8px;">
+        <select id="battle-cat">
+          <option value="">-- Toutes catégories --</option>
+          <option value="az-900">AZ-900 (original)</option>
+          <option value="az-900-module-1-mcq">Module 1 — MCQ</option>
+          <option value="az-900-module-1-scenario">Module 1 — Scénario</option>
+          <option value="az-900-module-2-mcq">Module 2 — MCQ</option>
+          <option value="az-900-module-2-scenario">Module 2 — Scénario</option>
+          <option value="az-900-module-3-mcq">Module 3 — MCQ</option>
+          <option value="az-900-module-3-scenario">Module 3 — Scénario</option>
+          <option value="az-900-module-4-mcq">Module 4 — MCQ</option>
+          <option value="az-900-module-4-scenario">Module 4 — Scénario</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="loadBattleQuestions()">Charger</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleBattleSelectAll()">Tout sélectionner</button>
+      </div>
+
+      <div id="battle-bank-loading" style="display:none;color:var(--muted);font-size:0.9rem;padding:16px 0;">Chargement…</div>
+      <div id="battle-question-list" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-top:4px;"></div>
+
+      <!-- Chrono global -->
+      <div style="margin-top:8px;">
+        <label>Chrono global</label>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <button class="timer-toggle" id="battle-timer-toggle" onclick="toggleBattleTimer()"></button>
+          <span style="font-size:0.9rem;color:var(--muted);" id="battle-timer-label-txt">Désactivé</span>
+          <input class="timer-input" id="battle-timer-input" type="number" value="10" min="1" max="120" style="display:none;">
+          <span id="battle-timer-unit" style="color:var(--muted);font-size:0.85rem;display:none;">minutes</span>
+        </div>
+      </div>
+
+      <div class="bank-toolbar" style="margin-top:4px;">
+        <div class="bank-count"><span id="battle-selected-count">0</span> question(s) sélectionnée(s)</div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-ghost btn-sm" onclick="closeBattlePicker()">Annuler</button>
+          <button class="btn btn-battle" onclick="launchBattle()">Créer la session Battle →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- BATTLE WAITING (salle d'attente host, après création) -->
+    <div id="battle-waiting" class="panel" style="display:none;">
+      <div class="battle-waiting-header">
+        <div>
+          <div class="battle-badge">⚔️ BATTLE</div>
+          <h2 style="margin-top:8px;font-size:1.3rem;">En attente des joueurs</h2>
+        </div>
+        <button class="btn btn-battle" onclick="startBattle()" id="btn-start-battle">
+          Lancer la Battle ▶
+        </button>
+      </div>
+
+      <div class="battle-progress">
+        <span id="battle-joined-count">0</span> joueur(s) connecté(s) · <span id="battle-q-count">0</span> questions · chrono : <span id="battle-timer-display">sans limite</span>
+      </div>
+
+      <!-- Classement en temps réel (se remplit quand les joueurs finissent) -->
+      <div id="battle-ranking-section" style="display:none;">
+        <div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;margin-bottom:10px;">CLASSEMENT FINAL</div>
+        <div class="ranking-table" id="battle-ranking-table"></div>
+        <button class="btn btn-ghost btn-sm" onclick="forceRanking()" style="margin-top:12px;">
+          Forcer le classement (si quelqu'un a abandonné)
+        </button>
+      </div>
+
+      <div id="battle-ranking-waiting" style="color:var(--muted);font-size:0.85rem;margin-top:8px;">
+        Le classement apparaîtra ici quand tous les joueurs auront terminé.
+        <br><button class="btn btn-ghost btn-sm" onclick="forceRanking()" style="margin-top:10px;">Forcer maintenant</button>
+      </div>
+    </div>
+
+    <!-- SESSION ACTIVE (mode live) -->
+    <div id="session-screen" class="panel" style="display:none;">
       <div class="panel-title">NOUVELLE QUESTION</div>
 
       <div class="question-builder" id="question-builder">
@@ -566,7 +695,7 @@ function toggleTimer() {
 
 renderChoicesGrid();
 
-// ------- BANK PICKER -------
+// ------- BANK PICKER (mode live) -------
 
 let bankQuestions = [];
 let bankSelected = new Set();
@@ -731,7 +860,6 @@ async function launchNextFromQueue() {
   const q = bankQueue.shift();
   questionIndex++;
 
-  // POST la question dans la session
   const res = await fetch(`${API}/sessions/${sessionCode}/questions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -748,7 +876,6 @@ async function launchNextFromQueue() {
   await fetch(`${API}/sessions/${sessionCode}/questions/${created.id}/start`, { method: 'POST' });
   currentQuestion = { ...created, text: q.text, choices_text: q.choices_text };
 
-  // Stocker les correct_choices pour showStats
   selectedCorrect = new Set(q.correct_choices);
   numChoices = q.num_choices;
 
@@ -756,13 +883,11 @@ async function launchNextFromQueue() {
   document.getElementById('bank-queue-panel').style.display = 'none';
   document.getElementById('stats-panel').style.display = 'none';
 
-  // Afficher la question en cours côté host
   const hostQ = document.getElementById('active-question');
   hostQ.style.display = 'flex';
   hostQ.style.flexDirection = 'column';
   document.getElementById('active-q-label').textContent = `Question #${questionIndex} — ${q.text}`;
 
-  // Afficher les choix texte sous le label
   const existingChoices = document.getElementById('host-choices-display');
   if (existingChoices) existingChoices.remove();
   if (q.choices_text && q.choices_text.length) {
@@ -781,7 +906,202 @@ async function launchNextFromQueue() {
   document.getElementById('timer-display').style.display = 'none';
 }
 
-// ------- SESSION -------
+// ------- BATTLE PICKER -------
+
+let battleQuestions = [];
+let battleSelected = new Set();
+let battleTimerEnabled = false;
+let battleSessionCode = null;
+
+function openBattlePicker() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('battle-screen').style.display = 'flex';
+  document.getElementById('battle-screen').style.flexDirection = 'column';
+}
+
+function closeBattlePicker() {
+  document.getElementById('battle-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+  document.getElementById('setup-screen').style.flexDirection = 'column';
+}
+
+function toggleBattleTimer() {
+  battleTimerEnabled = !battleTimerEnabled;
+  document.getElementById('battle-timer-toggle').classList.toggle('on', battleTimerEnabled);
+  document.getElementById('battle-timer-input').style.display = battleTimerEnabled ? 'block' : 'none';
+  document.getElementById('battle-timer-unit').style.display = battleTimerEnabled ? 'inline' : 'none';
+  document.getElementById('battle-timer-label-txt').textContent = battleTimerEnabled ? '' : 'Désactivé';
+}
+
+async function loadBattleQuestions() {
+  const cat = document.getElementById('battle-cat').value;
+  const loading = document.getElementById('battle-bank-loading');
+  const list = document.getElementById('battle-question-list');
+  loading.style.display = 'block';
+  list.innerHTML = '';
+  battleQuestions = [];
+  battleSelected.clear();
+  updateBattleCount();
+
+  const url = cat ? `${API}/bank/questions?category=${encodeURIComponent(cat)}` : `${API}/bank/questions`;
+  const res = await fetch(url);
+  battleQuestions = await res.json();
+  loading.style.display = 'none';
+  renderBattleList();
+}
+
+function renderBattleList() {
+  const list = document.getElementById('battle-question-list');
+  list.innerHTML = '';
+  if (battleQuestions.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:0.9rem;padding:16px 0;">Aucune question trouvée.</div>';
+    return;
+  }
+  battleQuestions.forEach(q => {
+    const item = document.createElement('div');
+    item.className = 'bank-item' + (battleSelected.has(q.id) ? ' selected' : '');
+    item.innerHTML = `
+      <input type="checkbox" ${battleSelected.has(q.id) ? 'checked' : ''} onchange="toggleBattleItem(${q.id}, this)">
+      <div>
+        <div class="bank-item-text">${q.text}</div>
+        <div class="bank-item-meta">${q.category || ''} · ${q.num_choices} choix</div>
+      </div>`;
+    item.onclick = (e) => { if (e.target.tagName !== 'INPUT') { const cb = item.querySelector('input'); cb.checked = !cb.checked; toggleBattleItem(q.id, cb); } };
+    list.appendChild(item);
+  });
+}
+
+function toggleBattleItem(id, cb) {
+  if (cb.checked) battleSelected.add(id);
+  else battleSelected.delete(id);
+  const item = cb.closest('.bank-item');
+  item.classList.toggle('selected', cb.checked);
+  updateBattleCount();
+}
+
+function toggleBattleSelectAll() {
+  const allSelected = battleSelected.size === battleQuestions.length;
+  battleSelected.clear();
+  if (!allSelected) battleQuestions.forEach(q => battleSelected.add(q.id));
+  renderBattleList();
+  updateBattleCount();
+}
+
+function updateBattleCount() {
+  document.getElementById('battle-selected-count').textContent = battleSelected.size;
+}
+
+async function launchBattle() {
+  if (battleSelected.size === 0) {
+    alert('Sélectionne au moins une question.');
+    return;
+  }
+  const btn = document.querySelector('#battle-screen .btn-battle');
+  btn.textContent = 'Création…';
+  btn.disabled = true;
+
+  // 1. Créer la session en mode battle
+  const sRes = await fetch(`${API}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'battle' })
+  });
+  const sData = await sRes.json();
+  battleSessionCode = sData.code;
+  sessionCode = sData.code;
+
+  // 2. Préparer le payload de setup
+  const selectedQs = battleQuestions.filter(q => battleSelected.has(q.id));
+  const timeLimitSec = battleTimerEnabled
+    ? parseInt(document.getElementById('battle-timer-input').value) * 60
+    : null;
+
+  const setupPayload = {
+    time_limit_seconds: timeLimitSec,
+    questions: selectedQs.map((q, i) => ({
+      order_index: i + 1,
+      num_choices: q.num_choices,
+      correct_choices: q.correct_choices,
+      bank_question_id: q.id,
+      question_text: q.text,
+      choices_text: q.choices_text,
+    })),
+  };
+
+  // 3. Envoyer le setup au serveur
+  await fetch(`${API}/sessions/${battleSessionCode}/battle/setup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(setupPayload),
+  });
+
+  // 4. Afficher la salle d'attente host
+  document.getElementById('nav-code').textContent = battleSessionCode;
+  document.getElementById('battle-screen').style.display = 'none';
+  document.getElementById('battle-waiting').style.display = 'flex';
+  document.getElementById('battle-waiting').style.flexDirection = 'column';
+  document.getElementById('qr-panel').style.display = 'block';
+  document.getElementById('btn-end').style.display = 'block';
+
+  const joinUrl = `${window.location.origin}/student.html?session=${battleSessionCode}`;
+  document.getElementById('sidebar-code').textContent = battleSessionCode;
+  document.getElementById('join-url-text').textContent = joinUrl;
+  const img = document.createElement('img');
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}&bgcolor=1a1a24&color=e8e8f0`;
+  img.style.borderRadius = '8px';
+  img.width = 180; img.height = 180;
+  document.getElementById('qr-canvas').replaceWith(img);
+
+  document.getElementById('battle-q-count').textContent = selectedQs.length;
+  document.getElementById('battle-timer-display').textContent = timeLimitSec
+    ? `${timeLimitSec / 60} min`
+    : 'sans limite';
+
+  connectWS();
+  btn.textContent = 'Créer la session Battle →';
+  btn.disabled = false;
+}
+
+async function startBattle() {
+  const btn = document.getElementById('btn-start-battle');
+  btn.textContent = 'Lancement…';
+  btn.disabled = true;
+  await fetch(`${API}/sessions/${battleSessionCode}/battle/start`, { method: 'POST' });
+  btn.textContent = '✓ Battle lancée !';
+  document.getElementById('battle-ranking-waiting').style.display = 'block';
+}
+
+async function forceRanking() {
+  await fetch(`${API}/sessions/${battleSessionCode}/battle/ranking`, { method: 'POST' });
+}
+
+function showBattleRanking(ranking) {
+  const medals = ['🥇','🥈','🥉'];
+  const classes = ['gold','silver','bronze'];
+  const table = document.getElementById('battle-ranking-table');
+  table.innerHTML = '';
+
+  ranking.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.className = `ranking-row ${classes[i] || ''}`;
+    const elapsed = Math.round(entry.elapsed_seconds);
+    const min = Math.floor(elapsed / 60);
+    const sec = elapsed % 60;
+    const timeStr = min > 0 ? `${min}m${sec.toString().padStart(2,'0')}s` : `${sec}s`;
+    row.innerHTML = `
+      <span class="ranking-pos">${medals[i] || '#' + (i + 1)}</span>
+      <span class="ranking-name">${entry.display_name}</span>
+      <span class="ranking-score">${entry.score}/${entry.total}</span>
+      <span class="ranking-time">${timeStr}</span>
+    `;
+    table.appendChild(row);
+  });
+
+  document.getElementById('battle-ranking-waiting').style.display = 'none';
+  document.getElementById('battle-ranking-section').style.display = 'block';
+}
+
+// ------- SESSION (live) -------
 
 async function createSession(mode) {
   const res = await fetch(`${API}/sessions`, {
@@ -803,28 +1123,34 @@ async function createSession(mode) {
   document.getElementById('sidebar-code').textContent = sessionCode;
   document.getElementById('join-url-text').textContent = joinUrl;
 
-  // QR Code
-const img = document.createElement('img');
-img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}&bgcolor=1a1a24&color=e8e8f0`;
-img.style.borderRadius = '8px';
-img.width = 180;
-img.height = 180;
-document.getElementById('qr-canvas').replaceWith(img);
+  const img = document.createElement('img');
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}&bgcolor=1a1a24&color=e8e8f0`;
+  img.style.borderRadius = '8px';
+  img.width = 180;
+  img.height = 180;
+  document.getElementById('qr-canvas').replaceWith(img);
 
   connectWS();
 }
 
 // ------- WEBSOCKET -------
 
+let answerCount = 0;
+
 function connectWS() {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${sessionCode}`);  ws.onmessage = (e) => {
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${sessionCode}`);
+  ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.type === 'participant_join') {
       addParticipant(msg);
+      // Mettre à jour le compteur battle si on est en salle d'attente battle
+      document.getElementById('battle-joined-count').textContent = participants.length;
     } else if (msg.type === 'answer_received') {
       answerCount = msg.total_answers;
       document.getElementById('answer-count-num').textContent = answerCount;
+    } else if (msg.type === 'battle_ranking') {
+      showBattleRanking(msg.ranking);
     }
   };
 }
@@ -844,7 +1170,7 @@ function addParticipant(data) {
   list.appendChild(item);
 }
 
-// ------- QUESTION -------
+// ------- QUESTION (live) -------
 
 async function launchQuestion() {
   if (selectedCorrect.size === 0) {
@@ -871,7 +1197,6 @@ async function launchQuestion() {
   currentQuestion = q;
   answerCount = 0;
 
-  // UI
   document.getElementById('question-builder').style.display = 'none';
   document.getElementById('stats-panel').style.display = 'none';
   document.getElementById('active-question').style.display = 'flex';
@@ -939,35 +1264,33 @@ function showStats(stats) {
         </div>
       </div>`;
   }
-  // mettre a jour les scores cumulés
-stats.results.forEach(r => {
-  if (!participantScores[r.display_name]) {
-    participantScores[r.display_name] = { correct: 0, total: 0 };
-  }
-  participantScores[r.display_name].total++;
-  if (r.is_correct) participantScores[r.display_name].correct++;
-});
 
-// trier par score
-const ladder = Object.entries(participantScores)
-  .sort((a, b) => b[1].correct - a[1].correct);
+  stats.results.forEach(r => {
+    if (!participantScores[r.display_name]) {
+      participantScores[r.display_name] = { correct: 0, total: 0 };
+    }
+    participantScores[r.display_name].total++;
+    if (r.is_correct) participantScores[r.display_name].correct++;
+  });
 
-// afficher
-const oldDetail = document.getElementById('detail-participants');
-if (oldDetail) oldDetail.remove();
+  const ladder = Object.entries(participantScores)
+    .sort((a, b) => b[1].correct - a[1].correct);
 
-let detail = '<div id="detail-participants" style="margin-top:16px;display:flex;flex-direction:column;gap:6px;">';
-detail += '<div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;margin-bottom:4px;">CLASSEMENT</div>';
-ladder.forEach(([name, score], index) => {
-  const pct = Math.round((score.correct / score.total) * 100);
-  const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
-  detail += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:0.85rem;">
-    <span>${medal} ${name}</span>
-    <span style="font-family:var(--mono);color:var(--green)">${score.correct}/${score.total} <span style="color:var(--muted)">(${pct}%)</span></span>
-  </div>`;
-});
-detail += '</div>';
-bars.insertAdjacentHTML('afterend', detail);
+  const oldDetail = document.getElementById('detail-participants');
+  if (oldDetail) oldDetail.remove();
+
+  let detail = '<div id="detail-participants" style="margin-top:16px;display:flex;flex-direction:column;gap:6px;">';
+  detail += '<div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;margin-bottom:4px;">CLASSEMENT</div>';
+  ladder.forEach(([name, score], index) => {
+    const pct = Math.round((score.correct / score.total) * 100);
+    const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
+    detail += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:0.85rem;">
+      <span>${medal} ${name}</span>
+      <span style="font-family:var(--mono);color:var(--green)">${score.correct}/${score.total} <span style="color:var(--muted)">(${pct}%)</span></span>
+    </div>`;
+  });
+  detail += '</div>';
+  bars.insertAdjacentHTML('afterend', detail);
 }
 
 function nextQuestion() {
@@ -979,7 +1302,6 @@ function nextQuestion() {
   document.getElementById('timer-display').style.display = 'none';
   document.getElementById('timer-display').classList.remove('urgent');
 
-  // Mode banque : afficher la file restante
   if (bankQueue !== undefined && document.getElementById('bank-queue-panel')) {
     document.getElementById('bank-queue-panel').style.display = 'flex';
     renderBankQueue();
@@ -992,9 +1314,9 @@ function nextQuestion() {
 // ------- HISTORIQUE -------
 renderChoicesGrid();
 
-  function endSession() {
-    if (!confirm('Terminer la session ?')) return;
-    location.reload();
+function endSession() {
+  if (!confirm('Terminer la session ?')) return;
+  location.reload();
 }
 </script>
 </body>

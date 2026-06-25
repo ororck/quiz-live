@@ -26,7 +26,7 @@ class QuestionBankOut(BaseModel):
 # --- Session (mémoire) ---
 
 class SessionCreate(BaseModel):
-    mode: str = "live"  # live | solo
+    mode: str = "live"  # live | solo | battle
 
 class SessionOut(BaseModel):
     code: str
@@ -93,3 +93,35 @@ class QuestionStats(BaseModel):
     correct_count: int
     choices_breakdown: dict[int, int]
     results: list[ParticipantResult]
+
+
+# --- Battle (mémoire) ---
+
+class BattleQuestionIn(BaseModel):
+    order_index: int
+    num_choices: int
+    correct_choices: list[int]
+    bank_question_id: int | None = None
+    question_text: str | None = None
+    choices_text: list[str] | None = None
+
+class BattleSetup(BaseModel):
+    time_limit_seconds: int | None = None  # chrono global ; None = sans chrono
+    questions: list[BattleQuestionIn]
+
+class BattleFinish(BaseModel):
+    participant_id: int
+
+class BattleRankEntry(BaseModel):
+    display_name: str
+    score: int
+    total: int
+    elapsed_seconds: float
+
+class BattleResult(BaseModel):
+    participant_id: int
+    score: int
+    total: int
+    elapsed_seconds: float
+    all_finished: bool
+    ranking: list[BattleRankEntry] | None = None

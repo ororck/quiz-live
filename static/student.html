@@ -14,6 +14,7 @@
     --accent: #7c6aff;
     --green: #22d98a;
     --red: #ff5c5c;
+    --orange: #ff9f43;
     --text: #e8e8f0;
     --muted: #6b6b8a;
     --mono: 'Space Mono', monospace;
@@ -281,6 +282,61 @@
     font-family: var(--sans);
     font-weight: 600;
   }
+
+  /* BATTLE */
+  .battle-badge-pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: rgba(255,159,67,0.12);
+    color: var(--orange);
+    border: 1px solid var(--orange);
+    text-align: center;
+  }
+
+  /* Barre de progression battle */
+  .battle-progress-bar-wrap {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+  .battle-progress-bar {
+    height: 100%;
+    background: var(--orange);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+  /* Timer global battle */
+  .battle-global-timer {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--orange);
+    text-align: center;
+  }
+  .battle-global-timer.urgent { color: var(--red); }
+
+  /* Ranking battle (côté student) */
+  .ranking-table { display: flex; flex-direction: column; gap: 6px; }
+  .ranking-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: var(--bg); border-radius: 8px;
+    font-size: 0.88rem; border: 1px solid var(--border);
+  }
+  .ranking-row.gold   { border-color: #ffd700; background: rgba(255,215,0,0.06); }
+  .ranking-row.silver { border-color: #c0c0c0; background: rgba(192,192,192,0.06); }
+  .ranking-row.bronze { border-color: #cd7f32; background: rgba(205,127,50,0.06); }
+  .ranking-pos { font-family: var(--mono); font-size: 1.1rem; width: 32px; }
+  .ranking-name { flex: 1; margin: 0 10px; font-weight: 600; }
+  .ranking-score { font-family: var(--mono); color: var(--green); }
+  .ranking-time { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); margin-left: 8px; }
+  .ranking-me { background: rgba(124,106,255,0.08) !important; border-color: var(--accent) !important; }
 </style>
 </head>
 <body>
@@ -310,7 +366,7 @@
   </div>
 </div>
 
-<!-- SCREEN 2 : JOIN LIVE -->
+<!-- SCREEN 2 : JOIN LIVE / BATTLE -->
 <div class="screen" id="screen-join">
   <div class="logo">QUIZ_LIVE</div>
   <div class="card" style="gap:16px;display:flex;flex-direction:column;">
@@ -416,7 +472,7 @@
   </div>
 </div>
 
-<!-- SCREEN 4 : ATTENTE -->
+<!-- SCREEN 4 : ATTENTE (live) -->
 <div class="screen" id="screen-waiting">
   <div class="logo">QUIZ_LIVE</div>
   <div class="card" style="gap:16px;display:flex;flex-direction:column;align-items:center;">
@@ -427,7 +483,20 @@
   </div>
 </div>
 
-<!-- SCREEN 5 : QUESTION -->
+<!-- SCREEN 4B : ATTENTE BATTLE -->
+<div class="screen" id="screen-battle-waiting">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;align-items:center;">
+    <div class="battle-badge-pill">⚔️ BATTLE</div>
+    <div class="session-badge" id="battle-waiting-code"></div>
+    <div class="waiting-icon" style="font-size:2.5rem;">⚔️</div>
+    <h2 style="text-align:center">Prêt au combat !</h2>
+    <p style="text-align:center" id="battle-waiting-info">En attente du lancement par le créateur…</p>
+    <p style="text-align:center;font-size:0.8rem;color:var(--muted);" id="battle-waiting-qcount"></p>
+  </div>
+</div>
+
+<!-- SCREEN 5 : QUESTION (solo & live) -->
 <div class="screen" id="screen-question">
   <div class="logo">QUIZ_LIVE</div>
 
@@ -464,6 +533,36 @@
 
   <!-- Bouton stop session solo -->
   <button class="btn btn-danger" id="btn-stop-solo" style="display:none;" onclick="stopSolo()">⏹ Arrêter et voir le récap</button>
+</div>
+
+<!-- SCREEN 5B : QUESTION BATTLE -->
+<div class="screen" id="screen-battle-question">
+  <div class="logo">QUIZ_LIVE</div>
+
+  <!-- Barre de progression + timer global -->
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;padding:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);" id="bq-counter">Q1/10</span>
+      <span class="battle-global-timer" id="battle-global-timer" style="display:none;"></span>
+    </div>
+    <div class="battle-progress-bar-wrap">
+      <div class="battle-progress-bar" id="battle-progress-bar" style="width:0%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;">
+      <span style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);" id="bq-score-live">0 / 0</span>
+      <span class="battle-badge-pill" style="font-size:0.6rem;padding:2px 8px;">⚔️ BATTLE</span>
+    </div>
+  </div>
+
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <p id="bq-text" style="font-size:0.95rem;line-height:1.6;color:var(--text);font-weight:500;"></p>
+    <div class="choices-grid" id="bq-choices-grid"></div>
+    <div class="confirm-row" id="bq-confirm-row" style="display:none">
+      <button class="btn btn-ghost" onclick="battleClearSelection()">Effacer</button>
+      <button class="btn btn-confirm" onclick="battleSubmitAnswer()">Valider ✓</button>
+    </div>
+    <p style="text-align:center;font-size:0.8rem;color:var(--muted);" id="bq-hint">Sélectionne ta réponse</p>
+  </div>
 </div>
 
 <!-- SCREEN 6 : RESULTAT QUESTION (live uniquement) -->
@@ -533,6 +632,48 @@
   <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour à l'accueil</button>
 </div>
 
+<!-- SCREEN 8 : SCORE PERSO BATTLE (quand le joueur a fini, en attente du classement) -->
+<div class="screen" id="screen-battle-score">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:12px;display:flex;flex-direction:column;align-items:center;">
+    <div class="battle-badge-pill">⚔️ BATTLE TERMINÉE</div>
+    <div class="result-icon">🏁</div>
+    <h2 style="text-align:center;">Ton score</h2>
+    <div class="score-row" style="width:100%;padding:8px 0;">
+      <div class="score-item">
+        <div class="score-num green" id="battle-score-correct">0</div>
+        <div class="score-label">BONNES</div>
+      </div>
+      <div class="score-item">
+        <div class="score-pct" id="battle-score-pct" style="font-size:2rem;">–</div>
+        <div class="score-label">SCORE</div>
+      </div>
+      <div class="score-item">
+        <div class="score-num red" id="battle-score-wrong">0</div>
+        <div class="score-label">FAUSSES</div>
+      </div>
+    </div>
+    <p style="text-align:center;" id="battle-score-time"></p>
+  </div>
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;align-items:center;">
+    <div class="waiting-icon" style="font-size:2rem;animation-duration:3s;">⏳</div>
+    <p style="text-align:center;">En attente des autres joueurs…<br>Le classement final s'affichera quand tout le monde aura terminé.</p>
+  </div>
+</div>
+
+<!-- SCREEN 9 : CLASSEMENT FINAL BATTLE -->
+<div class="screen" id="screen-battle-ranking">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:12px;display:flex;flex-direction:column;">
+    <div class="battle-badge-pill">⚔️ CLASSEMENT FINAL</div>
+    <h2 style="margin-top:8px;">Résultats Battle</h2>
+  </div>
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;">
+    <div class="ranking-table" id="student-ranking-table"></div>
+  </div>
+  <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour à l'accueil</button>
+</div>
+
 <script>
 const API = 'https://quiz-live.gentleocean-508dd739.francecentral.azurecontainerapps.io';
 const letters = ['A','B','C','D','E','F'];
@@ -546,7 +687,7 @@ let timerTotal = 0;
 let ws = null;
 let scoreCorrect = 0;
 let scoreTotal = 0;
-let mode = 'live';
+let mode = 'live'; // live | solo | battle
 
 // Solo
 let soloQuestions = [];
@@ -554,6 +695,16 @@ let soloIndex = 0;
 let soloTimerEnabled = false;
 let soloTheme = 'az-900';
 let wrongAnswers = [];
+
+// Battle
+let battleQuestions = [];     // liste ordonnée reçue dans battle_start
+let battleIndex = 0;          // index de la question en cours
+let battleCorrect = 0;        // bonnes réponses accumulées
+let battleSelectedChoices = new Set();
+let battleGlobalTimerInterval = null;
+let battleStartedAt = null;   // Date JS de début
+let battleTimeLimitSec = null;
+let battleDisplayName = '';
 
 // ------- NAVIGATION -------
 
@@ -577,28 +728,44 @@ window.onload = () => {
   if (params.get('session')) showJoin();
 };
 
-// ------- JOIN LIVE -------
+// ------- JOIN LIVE / BATTLE -------
 
 async function joinSession() {
   const code = document.getElementById('session-code-input').value.trim().toUpperCase();
   const name = document.getElementById('name-input').value.trim();
   if (!code || !name) { alert('Code et prénom requis.'); return; }
 
+  // Vérifier le mode de la session pour router vers battle ou live
+  const sessionRes = await fetch(`${API}/sessions/${code}`);
+  if (!sessionRes.ok) { alert('Session introuvable.'); return; }
+  const sessionData = await sessionRes.json();
+
   const res = await fetch(`${API}/sessions/${code}/join`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ display_name: name })
   });
-  if (!res.ok) { alert('Session introuvable.'); return; }
+  if (!res.ok) { alert('Impossible de rejoindre la session.'); return; }
 
   const data = await res.json();
   sessionCode = code;
   participantId = data.id;
-  mode = 'live';
+  battleDisplayName = name;
 
-  document.getElementById('waiting-code').textContent = code;
-  showScreen('screen-waiting');
-  connectWS();
+  if (sessionData.mode === 'battle') {
+    // --- Mode Battle : écran d'attente dédié ---
+    mode = 'battle';
+    document.getElementById('battle-waiting-code').textContent = code;
+    document.getElementById('battle-waiting-info').textContent = 'En attente du lancement par le créateur…';
+    showScreen('screen-battle-waiting');
+    connectWS();
+  } else {
+    // --- Mode Live classique ---
+    mode = 'live';
+    document.getElementById('waiting-code').textContent = code;
+    showScreen('screen-waiting');
+    connectWS();
+  }
 }
 
 // ------- SOLO -------
@@ -692,13 +859,11 @@ async function startSolo() {
   participantId = participant.id;
   mode = 'solo';
 
-  // Charger les questions de toutes les catégories sélectionnées en parallèle
   const results = await Promise.all(
     categories.map(cat => fetch(`${API}/bank/questions?category=${encodeURIComponent(cat)}`).then(r => r.json()))
   );
   let questions = results.flat();
 
-  // Dédupliquer par ID
   const seen_ids = new Map();
   questions = questions.filter(q => { if (seen_ids.has(q.id)) return false; seen_ids.set(q.id, true); return true; });
 
@@ -783,7 +948,9 @@ function connectWS() {
   ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${sessionCode}`);
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
+
     if (msg.type === 'question_start') {
+      // Mode live classique
       currentQuestion = msg;
       const qTextEl = document.getElementById('q-text');
       if (msg.question_text) {
@@ -794,13 +961,23 @@ function connectWS() {
       }
       renderQuestion(msg.num_choices, msg.time_limit_seconds, msg.order_index, msg.choices_text || null, 1);
       showScreen('screen-question');
+
     } else if (msg.type === 'question_reveal') {
+      // Mode live classique
       showResultFromReveal(msg);
+
+    } else if (msg.type === 'battle_start') {
+      // Mode battle : on reçoit tout le set d'un coup
+      startBattleGame(msg);
+
+    } else if (msg.type === 'battle_ranking') {
+      // Classement final reçu (déclenché par le dernier joueur ou par le host)
+      showBattleRanking(msg.ranking);
     }
   };
 }
 
-// ------- QUESTION -------
+// ------- QUESTION (solo & live) -------
 
 function renderQuestion(numChoices, timeLimitSec, orderIndex, choicesText, numCorrect) {
   selectedChoices.clear();
@@ -827,10 +1004,8 @@ function renderQuestion(numChoices, timeLimitSec, orderIndex, choicesText, numCo
     }
 
     if (mode === 'solo' && numCorrect === 1) {
-      // Choix unique : clic direct = valide immédiatement
       btn.onclick = () => selectAndSubmit(i, btn);
     } else {
-      // Multi-choix : sélection puis bouton Valider
       btn.onclick = () => toggleChoice(i, btn);
     }
     grid.appendChild(btn);
@@ -849,7 +1024,6 @@ function renderQuestion(numChoices, timeLimitSec, orderIndex, choicesText, numCo
   showScreen('screen-question');
 }
 
-// Clic direct (choix unique solo)
 function selectAndSubmit(i, btn) {
   if (btn.disabled) return;
   selectedChoices.clear();
@@ -897,7 +1071,7 @@ function autoSubmit() {
   submitAnswer();
 }
 
-// ------- REPONSE -------
+// ------- REPONSE (solo & live) -------
 
 async function submitAnswer() {
   clearInterval(timerInterval);
@@ -932,17 +1106,14 @@ function showResultSolo(answer) {
   const bq = currentQuestion.bank_question;
   const correct = currentQuestion.correct_choices_real;
 
-  // Marquer la question comme vue
   markSeen(soloTheme, bq.id);
 
-  // Colorer les boutons
   document.querySelectorAll('.choice-btn').forEach(btn => {
     const i = parseInt(btn.dataset.index);
     if (correct.includes(i)) btn.classList.add('correct');
     else if (selectedChoices.has(i)) btn.classList.add('wrong');
   });
 
-  // Stocker les erreurs pour le récap
   if (!answer.is_correct) {
     const correctLabels = correct.map(i =>
       bq.choices_text ? `${letters[i]}) ${bq.choices_text[i]}` : letters[i]
@@ -950,10 +1121,8 @@ function showResultSolo(answer) {
     wrongAnswers.push({ text: bq.text, correctLabels });
   }
 
-  // Mettre à jour le score continu
   updateScoreBar();
 
-  // Passer à la question suivante après 1.2s
   setTimeout(() => {
     soloIndex++;
     loadSoloQuestion();
@@ -984,10 +1153,9 @@ function showResultScreen(isCorrect) {
   showScreen('screen-result');
 }
 
-// ------- RECAP FINAL -------
+// ------- RECAP FINAL SOLO -------
 
 function showRecap() {
-  // Cacher score bar et bouton stop
   document.getElementById('solo-score-bar').style.display = 'none';
   document.getElementById('btn-stop-solo').style.display = 'none';
 
@@ -997,7 +1165,6 @@ function showRecap() {
   document.getElementById('recap-wrong').textContent = scoreTotal - scoreCorrect;
   document.getElementById('recap-pct').textContent = pct + '%';
 
-  // Liste des erreurs
   const list = document.getElementById('recap-wrong-list');
   list.innerHTML = '';
   if (wrongAnswers.length === 0) {
@@ -1014,7 +1181,6 @@ function showRecap() {
     });
   }
 
-  // Générer le prompt IA
   if (wrongAnswers.length > 0) {
     const promptText = buildPrompt();
     document.getElementById('recap-prompt').textContent = promptText;
@@ -1041,6 +1207,240 @@ function copyPrompt() {
     btn.textContent = '✓ Copié !';
     setTimeout(() => btn.textContent = 'Copier', 2000);
   });
+}
+
+// ============================================================
+// MODE BATTLE
+// ============================================================
+
+function startBattleGame(msg) {
+  // On reçoit : { type, time_limit_seconds, started_at, questions: [...] }
+  battleQuestions = msg.questions;  // liste ordonnée, corrects inclus
+  battleIndex = 0;
+  battleCorrect = 0;
+  battleTimeLimitSec = msg.time_limit_seconds || null;
+  battleStartedAt = new Date(msg.started_at);
+
+  // Démarrer le timer global si défini
+  if (battleTimeLimitSec) {
+    startBattleGlobalTimer();
+  }
+
+  loadBattleQuestion();
+}
+
+function loadBattleQuestion() {
+  if (battleIndex >= battleQuestions.length) {
+    // Plus de questions : envoyer finish au serveur
+    finishBattle();
+    return;
+  }
+
+  const q = battleQuestions[battleIndex];
+
+  // Mettre à jour le compteur et la barre de progression
+  document.getElementById('bq-counter').textContent = `Q${battleIndex + 1}/${battleQuestions.length}`;
+  const pct = Math.round((battleIndex / battleQuestions.length) * 100);
+  document.getElementById('battle-progress-bar').style.width = pct + '%';
+  document.getElementById('bq-score-live').textContent = `${battleCorrect} / ${battleIndex}`;
+
+  // Texte de la question
+  document.getElementById('bq-text').textContent = q.question_text || '';
+
+  // Reset sélection
+  battleSelectedChoices.clear();
+  document.getElementById('bq-confirm-row').style.display = 'none';
+  document.getElementById('bq-hint').textContent = q.correct_choices.length > 1
+    ? 'Plusieurs bonnes réponses possibles'
+    : 'Sélectionne ta réponse';
+
+  // Construire la grille de choix
+  const grid = document.getElementById('bq-choices-grid');
+  grid.innerHTML = '';
+
+  const numCorrect = q.correct_choices.length;
+
+  for (let i = 0; i < q.num_choices; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.dataset.index = i;
+    btn.textContent = q.choices_text ? q.choices_text[i] : letters[i];
+
+    if (q.choices_text) {
+      btn.style.fontSize = '0.9rem';
+      btn.style.aspectRatio = 'auto';
+      btn.style.padding = '16px';
+      btn.style.textAlign = 'left';
+      btn.style.justifyContent = 'flex-start';
+    }
+
+    if (numCorrect === 1) {
+      // Choix unique : clic direct
+      btn.onclick = () => battleSelectAndSubmit(i, btn);
+    } else {
+      // Multi-choix : sélection + valider
+      btn.onclick = () => battleToggleChoice(i, btn);
+    }
+    grid.appendChild(btn);
+  }
+
+  showScreen('screen-battle-question');
+}
+
+function battleToggleChoice(i, btn) {
+  if (btn.disabled) return;
+  if (battleSelectedChoices.has(i)) {
+    battleSelectedChoices.delete(i);
+    btn.classList.remove('selected');
+  } else {
+    battleSelectedChoices.add(i);
+    btn.classList.add('selected');
+  }
+  document.getElementById('bq-confirm-row').style.display = battleSelectedChoices.size > 0 ? 'flex' : 'none';
+}
+
+function battleClearSelection() {
+  battleSelectedChoices.clear();
+  document.querySelectorAll('#bq-choices-grid .choice-btn').forEach(b => b.classList.remove('selected'));
+  document.getElementById('bq-confirm-row').style.display = 'none';
+}
+
+function battleSelectAndSubmit(i, btn) {
+  if (btn.disabled) return;
+  battleSelectedChoices.clear();
+  battleSelectedChoices.add(i);
+  document.querySelectorAll('#bq-choices-grid .choice-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  battleSubmitAnswer();
+}
+
+async function battleSubmitAnswer() {
+  document.querySelectorAll('#bq-choices-grid .choice-btn').forEach(b => b.disabled = true);
+  document.getElementById('bq-confirm-row').style.display = 'none';
+
+  const q = battleQuestions[battleIndex];
+  const selected = Array.from(battleSelectedChoices).filter(x => x >= 0);
+
+  // Appel HTTP à /answer (les questions sont déjà en status active côté serveur)
+  const res = await fetch(`${API}/sessions/${sessionCode}/questions/${q.question_id}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      participant_id: participantId,
+      selected_choices: selected,
+    })
+  });
+  const answer = await res.json();
+
+  // Colorer les boutons (feedback immédiat comme en solo)
+  document.querySelectorAll('#bq-choices-grid .choice-btn').forEach(btn => {
+    const i = parseInt(btn.dataset.index);
+    if (q.correct_choices.includes(i)) btn.classList.add('correct');
+    else if (battleSelectedChoices.has(i)) btn.classList.add('wrong');
+  });
+
+  if (answer.is_correct) battleCorrect++;
+
+  // Passer à la question suivante après 1.2s
+  setTimeout(() => {
+    battleIndex++;
+    loadBattleQuestion();
+  }, 1200);
+}
+
+async function finishBattle() {
+  // Stopper le timer global
+  clearInterval(battleGlobalTimerInterval);
+
+  // Calculer le temps écoulé
+  const elapsedMs = Date.now() - battleStartedAt.getTime();
+  const elapsedSec = Math.round(elapsedMs / 1000);
+
+  // Afficher l'écran de score perso en attente
+  const total = battleQuestions.length;
+  const pct = total > 0 ? Math.round((battleCorrect / total) * 100) : 0;
+
+  document.getElementById('battle-score-correct').textContent = battleCorrect;
+  document.getElementById('battle-score-wrong').textContent = total - battleCorrect;
+  document.getElementById('battle-score-pct').textContent = pct + '%';
+
+  const min = Math.floor(elapsedSec / 60);
+  const sec = elapsedSec % 60;
+  document.getElementById('battle-score-time').textContent = min > 0
+    ? `Temps : ${min}m${sec.toString().padStart(2,'0')}s`
+    : `Temps : ${sec}s`;
+
+  showScreen('screen-battle-score');
+
+  // Appel au serveur pour enregistrer la fin et déclencher éventuellement le classement
+  await fetch(`${API}/sessions/${sessionCode}/battle/finish`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ participant_id: participantId }),
+  });
+  // Le classement arrivera via WebSocket (battle_ranking) quand tout le monde aura fini
+}
+
+function startBattleGlobalTimer() {
+  const timerEl = document.getElementById('battle-global-timer');
+  timerEl.style.display = 'block';
+  timerEl.classList.remove('urgent');
+
+  const tick = () => {
+    const elapsed = (Date.now() - battleStartedAt.getTime()) / 1000;
+    const remaining = Math.max(0, battleTimeLimitSec - elapsed);
+    const min = Math.floor(remaining / 60);
+    const sec = Math.floor(remaining % 60);
+    timerEl.textContent = min > 0
+      ? `${min}:${sec.toString().padStart(2,'0')}`
+      : `${Math.floor(remaining)}s`;
+
+    if (remaining <= 60) timerEl.classList.add('urgent');
+
+    if (remaining <= 0) {
+      clearInterval(battleGlobalTimerInterval);
+      // Temps écoulé : soumettre automatiquement si une question est en cours
+      if (battleIndex < battleQuestions.length) {
+        // Forcer une réponse vide si rien n'est sélectionné
+        if (battleSelectedChoices.size === 0) battleSelectedChoices.add(-1);
+        battleSubmitAnswer();
+      }
+    }
+  };
+
+  tick();
+  battleGlobalTimerInterval = setInterval(tick, 1000);
+}
+
+function showBattleRanking(ranking) {
+  // Arrêter le timer si encore actif
+  clearInterval(battleGlobalTimerInterval);
+
+  const medals = ['🥇','🥈','🥉'];
+  const classes = ['gold','silver','bronze'];
+  const table = document.getElementById('student-ranking-table');
+  table.innerHTML = '';
+
+  ranking.forEach((entry, i) => {
+    const row = document.createElement('div');
+    const isMe = entry.display_name === battleDisplayName;
+    row.className = `ranking-row ${classes[i] || ''} ${isMe ? 'ranking-me' : ''}`;
+
+    const elapsed = Math.round(entry.elapsed_seconds);
+    const min = Math.floor(elapsed / 60);
+    const sec = elapsed % 60;
+    const timeStr = min > 0 ? `${min}m${sec.toString().padStart(2,'0')}s` : `${sec}s`;
+
+    row.innerHTML = `
+      <span class="ranking-pos">${medals[i] || '#' + (i + 1)}</span>
+      <span class="ranking-name">${entry.display_name}${isMe ? ' 👤' : ''}</span>
+      <span class="ranking-score">${entry.score}/${entry.total}</span>
+      <span class="ranking-time">${timeStr}</span>
+    `;
+    table.appendChild(row);
+  });
+
+  showScreen('screen-battle-ranking');
 }
 
 </script>

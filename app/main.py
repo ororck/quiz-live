@@ -58,6 +58,12 @@ class SessionState:
         self._next_participant_id = 1
         self._next_question_id = 1
 
+        # --- Mode Battle ---
+        self.battle_time_limit_seconds: int | None = None
+        self.battle_started_at = None
+        self.battle_roster: list[int] = []   # joueurs figés au lancement
+        self.finished: dict[int, dict] = {}  # pid -> {score, total, elapsed, finished_at}
+
     def add_participant(self, display_name: str) -> int:
         pid = self._next_participant_id
         self._next_participant_id += 1
@@ -320,7 +326,7 @@ async def submit_answer(request: Request, code: str, question_id: int, payload: 
     if q.status != "active":
         raise HTTPException(400, "La question n'est pas active")
 
-    # Vérification du timer
+    # Vérification du timer (uniquement en mode live, pas en battle où le timer est global)
     if q.time_limit_seconds and q.started_at:
         elapsed = (datetime.now(timezone.utc) - q.started_at).total_seconds()
         if elapsed > q.time_limit_seconds:
@@ -346,6 +352,143 @@ async def submit_answer(request: Request, code: str, question_id: int, payload: 
         selected_choices=payload.selected_choices,
         is_correct=is_correct,
     )
+
+
+# ---------------------------------------------------------------------------
+# Routes : Mode Battle (mémoire) -- self-paced, classement agrégé
+# ---------------------------------------------------------------------------
+
+def _battle_score(s: SessionState, pid: int) -> tuple[int, int]:
+    """Score d'un joueur = nb de bonnes réponses sur l'ensemble du set."""
+    total = len(s.questions)
+    score = sum(
+        1 for q in s.questions.values()
+        if (a := q.answers.get(pid)) and a["is_correct"]
+    )
+    return score, total
+
+
+def _battle_ranking(s: SessionState) -> list[schemas.BattleRankEntry]:
+    entries = [
+        schemas.BattleRankEntry(
+            display_name=s.participants.get(pid, "Anonyme"),
+            score=info["score"],
+            total=info["total"],
+            elapsed_seconds=info["elapsed"],
+        )
+        for pid, info in s.finished.items()
+    ]
+    # Meilleur score d'abord, puis temps le plus court (départage Kahoot)
+    entries.sort(key=lambda e: (-e.score, e.elapsed_seconds))
+    return entries
+
+
+@app.post("/sessions/{code}/battle/setup")
+def battle_setup(code: str, payload: schemas.BattleSetup):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    s.battle_time_limit_seconds = payload.time_limit_seconds
+    # Précharge le set partagé : identique pour tous les joueurs
+    for q in payload.questions:
+        s.add_question(
+            order_index=q.order_index,
+            num_choices=q.num_choices,
+            correct_choices=q.correct_choices,
+            time_limit_seconds=None,          # pas de timer par question en battle
+            bank_question_id=q.bank_question_id,
+            question_text=q.question_text,
+            choices_text=q.choices_text,
+        )
+    return {"ok": True, "question_count": len(s.questions)}
+
+
+@app.post("/sessions/{code}/battle/start")
+async def battle_start(code: str):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    s.status = "active"
+    s.battle_started_at = datetime.now(timezone.utc)
+    s.battle_roster = list(s.participants.keys())   # fige les joueurs présents
+
+    ordered = sorted(s.questions.values(), key=lambda q: q.order_index)
+    questions_payload = []
+    for q in ordered:
+        q.status = "active"                          # débloque /answer pour tout le set
+        questions_payload.append({
+            "question_id": q.id,
+            "order_index": q.order_index,
+            "num_choices": q.num_choices,
+            "correct_choices": q.correct_choices,    # envoyé au client comme en solo
+            "question_text": q.question_text,
+            "choices_text": q.choices_text,
+        })
+
+    await manager.broadcast(code, {
+        "type": "battle_start",
+        "time_limit_seconds": s.battle_time_limit_seconds,
+        "started_at": s.battle_started_at.isoformat(),
+        "questions": questions_payload,
+    })
+    return {"ok": True}
+
+
+@app.post("/sessions/{code}/battle/finish", response_model=schemas.BattleResult)
+async def battle_finish(code: str, payload: schemas.BattleFinish):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    pid = payload.participant_id
+
+    score, total = _battle_score(s, pid)
+    elapsed = (
+        (datetime.now(timezone.utc) - s.battle_started_at).total_seconds()
+        if s.battle_started_at else 0.0
+    )
+    # Plafonner l'elapsed au chrono global si défini
+    if s.battle_time_limit_seconds:
+        elapsed = min(elapsed, float(s.battle_time_limit_seconds))
+
+    s.finished[pid] = {
+        "score": score,
+        "total": total,
+        "elapsed": elapsed,
+        "finished_at": datetime.now(timezone.utc),
+    }
+
+    # Le dernier joueur du roster à finir déclenche le classement global
+    all_finished = set(s.battle_roster).issubset(s.finished.keys())
+    ranking = None
+    if all_finished:
+        ranking = _battle_ranking(s)
+        await manager.broadcast(code, {
+            "type": "battle_ranking",
+            "ranking": [e.model_dump() for e in ranking],
+        })
+
+    return schemas.BattleResult(
+        participant_id=pid,
+        score=score,
+        total=total,
+        elapsed_seconds=elapsed,
+        all_finished=all_finished,
+        ranking=ranking,
+    )
+
+
+@app.post("/sessions/{code}/battle/ranking", response_model=list[schemas.BattleRankEntry])
+async def battle_force_ranking(code: str):
+    """Échappatoire : si un joueur abandonne, force l'affichage du classement avec ceux qui ont fini."""
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    ranking = _battle_ranking(s)
+    await manager.broadcast(code, {
+        "type": "battle_ranking",
+        "ranking": [e.model_dump() for e in ranking],
+    })
+    return ranking
 
 
 # ---------------------------------------------------------------------------
