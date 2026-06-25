@@ -182,8 +182,8 @@
   .choice-btn:active { transform: scale(0.95); }
   .choice-btn:hover:not(:disabled) { border-color: var(--accent); background: rgba(124,106,255,0.08); }
   .choice-btn.selected { border-color: var(--accent); background: rgba(124,106,255,0.15); color: var(--accent); }
-  .choice-btn.correct { border-color: var(--green); background: rgba(34,217,138,0.12); color: var(--green); }
-  .choice-btn.wrong { border-color: var(--red); background: rgba(255,92,92,0.08); color: var(--red); opacity: 0.6; }
+  .choice-btn.correct { border-color: var(--green); background: rgba(34,217,138,0.32); color: #eafff5; font-weight: 700; }
+  .choice-btn.wrong { border-color: var(--red); background: rgba(255,92,92,0.28); color: #ffecec; opacity: 0.85; }
   .choice-btn:disabled { cursor: not-allowed; }
 
   .confirm-row { display: flex; gap: 10px; }
@@ -363,6 +363,13 @@
         <p>Entraîne-toi seul avec la banque de questions</p>
       </div>
     </div>
+    <div class="mode-card" onclick="showBattleSetup()">
+      <div class="mode-icon">⚔️</div>
+      <div class="mode-info">
+        <h3>Mode Battle</h3>
+        <p>Crée une battle, partage le code, affrontez-vous</p>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -470,6 +477,98 @@
     <button class="btn btn-primary" onclick="startSolo()">Commencer →</button>
     <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
   </div>
+</div>
+
+<!-- SCREEN 3B : CONFIG BATTLE (créateur) -->
+<div class="screen" id="screen-battle-setup">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <div class="battle-badge-pill">⚔️ CRÉER UNE BATTLE</div>
+    <h2>Configurer la battle</h2>
+
+    <div class="field">
+      <label>Ton prénom</label>
+      <input type="text" id="battle-name-input" placeholder="Mohamed" maxlength="24">
+    </div>
+
+    <!-- Modules -->
+    <div class="field">
+      <label>Modules <span style="font-size:0.75rem;color:var(--orange);" id="battle-module-count-label">(0 sélectionné)</span></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="battle-module-grid">
+        <div class="module-chip selected-chip" data-cats='["az-900-module-1-mcq","az-900-module-1-scenario"]' onclick="toggleBattleModule(this)">
+          <span>Module 1</span><small>Cloud Concepts</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-2-mcq","az-900-module-2-scenario"]' onclick="toggleBattleModule(this)">
+          <span>Module 2</span><small>Architecture & Compute</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-3-mcq","az-900-module-3-scenario"]' onclick="toggleBattleModule(this)">
+          <span>Module 3</span><small>Networking</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-4-mcq","az-900-module-4-scenario"]' onclick="toggleBattleModule(this)">
+          <span>Module 4</span><small>Storage</small>
+        </div>
+        <div class="module-chip" data-cats='["az-900"]' onclick="toggleBattleModule(this)" style="grid-column:span 2;">
+          <span>📚 AZ-900 Original</span><small>484 questions</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nombre de questions -->
+    <div class="field">
+      <label>Nombre de questions</label>
+      <div style="display:flex;gap:8px;">
+        <div class="mode-card" id="bn-10" style="flex:1;padding:12px;" onclick="selectBattleCount(10)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">10</h3></div>
+        </div>
+        <div class="mode-card selected-theme" id="bn-20" style="flex:1;padding:12px;" onclick="selectBattleCount(20)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">20</h3></div>
+        </div>
+        <div class="mode-card" id="bn-30" style="flex:1;padding:12px;" onclick="selectBattleCount(30)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">30</h3></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chrono global -->
+    <div class="field">
+      <label>Chrono global</label>
+      <div style="display:flex;gap:8px;">
+        <div class="mode-card selected-theme" id="bt-none" style="flex:1;padding:12px;" onclick="selectBattleTimer(null)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">Aucun</h3></div>
+        </div>
+        <div class="mode-card" id="bt-5" style="flex:1;padding:12px;" onclick="selectBattleTimer(5)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">5 min</h3></div>
+        </div>
+        <div class="mode-card" id="bt-10" style="flex:1;padding:12px;" onclick="selectBattleTimer(10)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">10 min</h3></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-confirm" onclick="createBattle()" id="btn-create-battle">Créer la battle →</button>
+    <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
+  </div>
+</div>
+
+<!-- SCREEN 3C : SALLE D'ATTENTE CRÉATEUR BATTLE -->
+<div class="screen" id="screen-battle-host-waiting">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;align-items:center;">
+    <div class="battle-badge-pill">⚔️ TA BATTLE</div>
+    <h2 style="text-align:center">Partage ce code</h2>
+    <div class="session-badge" id="battle-host-code"></div>
+    <p style="text-align:center;font-size:0.85rem;" id="battle-host-info">En attente des joueurs…</p>
+  </div>
+
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;">
+    <label style="font-size:0.8rem;color:var(--muted);">JOUEURS CONNECTÉS <span id="battle-host-count" style="color:var(--orange);">0</span></label>
+    <div id="battle-host-players" style="display:flex;flex-direction:column;gap:6px;">
+      <div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:12px 0;">En attente…</div>
+    </div>
+  </div>
+
+  <button class="btn btn-confirm" onclick="hostStartBattle()" id="btn-host-start-battle">Lancer la battle ▶</button>
+  <button class="btn btn-ghost" onclick="showScreen('screen-home')">Annuler</button>
 </div>
 
 <!-- SCREEN 4 : ATTENTE (live) -->
@@ -705,6 +804,11 @@ let battleGlobalTimerInterval = null;
 let battleStartedAt = null;   // Date JS de début
 let battleTimeLimitSec = null;
 let battleDisplayName = '';
+let isBattleHost = false;       // true si ce client a créé la battle
+let battleHostPlayers = [];     // joueurs vus dans la salle d'attente créateur
+// Config en cours de création
+let battleCfgCount = 20;
+let battleCfgTimerMin = null;   // minutes ou null
 
 // ------- NAVIGATION -------
 
@@ -722,6 +826,154 @@ function showJoin() {
 }
 
 function showSolo() { showScreen('screen-solo'); }
+
+// ------- CONFIG & CRÉATION BATTLE (créateur) -------
+
+function showBattleSetup() {
+  updateBattleModuleCount();
+  showScreen('screen-battle-setup');
+}
+
+function toggleBattleModule(el) {
+  el.classList.toggle('selected-chip');
+  updateBattleModuleCount();
+}
+
+function updateBattleModuleCount() {
+  const n = document.querySelectorAll('#battle-module-grid .module-chip.selected-chip').length;
+  document.getElementById('battle-module-count-label').textContent = `(${n} sélectionné${n > 1 ? 's' : ''})`;
+}
+
+function selectBattleCount(n) {
+  battleCfgCount = n;
+  [10, 20, 30].forEach(v => {
+    document.getElementById('bn-' + v).classList.toggle('selected-theme', v === n);
+  });
+}
+
+function selectBattleTimer(min) {
+  battleCfgTimerMin = min;
+  document.getElementById('bt-none').classList.toggle('selected-theme', min === null);
+  document.getElementById('bt-5').classList.toggle('selected-theme', min === 5);
+  document.getElementById('bt-10').classList.toggle('selected-theme', min === 10);
+}
+
+function getBattleSelectedCategories() {
+  const chips = document.querySelectorAll('#battle-module-grid .module-chip.selected-chip');
+  const cats = [];
+  chips.forEach(chip => JSON.parse(chip.dataset.cats).forEach(c => cats.push(c)));
+  return [...new Set(cats)];
+}
+
+function shuffleArr(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+async function createBattle() {
+  const name = document.getElementById('battle-name-input').value.trim();
+  if (!name) { alert('Entre ton prénom.'); return; }
+
+  const categories = getBattleSelectedCategories();
+  if (categories.length === 0) { alert('Sélectionne au moins un module.'); return; }
+
+  const btn = document.getElementById('btn-create-battle');
+  btn.textContent = 'Création…';
+  btn.disabled = true;
+
+  try {
+    // 1. Charger les questions des catégories choisies
+    const results = await Promise.all(
+      categories.map(cat => fetch(`${API}/bank/questions?category=${encodeURIComponent(cat)}`).then(r => r.json()))
+    );
+    let pool = results.flat();
+
+    // Dédoublonnage par id
+    const seen = new Set();
+    pool = pool.filter(q => { if (seen.has(q.id)) return false; seen.add(q.id); return true; });
+
+    if (pool.length === 0) { alert('Aucune question disponible.'); btn.textContent = 'Créer la battle →'; btn.disabled = false; return; }
+
+    // Mélanger et limiter au nombre choisi
+    pool = shuffleArr(pool).slice(0, battleCfgCount);
+
+    // 2. Créer la session en mode battle
+    const sRes = await fetch(`${API}/sessions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'battle' })
+    });
+    const sData = await sRes.json();
+    sessionCode = sData.code;
+
+    // 3. Setup des questions (chrono global converti en secondes)
+    const timeLimitSec = battleCfgTimerMin ? battleCfgTimerMin * 60 : null;
+    const setupPayload = {
+      time_limit_seconds: timeLimitSec,
+      questions: pool.map((q, i) => ({
+        order_index: i + 1,
+        num_choices: q.num_choices,
+        correct_choices: q.correct_choices,
+        bank_question_id: q.id,
+        question_text: q.text,
+        choices_text: q.choices_text,
+      })),
+    };
+    await fetch(`${API}/sessions/${sessionCode}/battle/setup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(setupPayload),
+    });
+
+    // 4. Le créateur rejoint aussi comme joueur
+    const pRes = await fetch(`${API}/sessions/${sessionCode}/join`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: name })
+    });
+    const pData = await pRes.json();
+    participantId = pData.id;
+    battleDisplayName = name;
+    isBattleHost = true;
+    battleHostPlayers = [];
+
+    // 5. Afficher la salle d'attente créateur
+    document.getElementById('battle-host-code').textContent = sessionCode;
+    document.getElementById('battle-host-info').textContent =
+      `${pool.length} questions · chrono : ${timeLimitSec ? battleCfgTimerMin + ' min' : 'aucun'}`;
+    document.getElementById('battle-host-count').textContent = '0';
+    document.getElementById('battle-host-players').innerHTML =
+      '<div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:12px 0;">En attente…</div>';
+    showScreen('screen-battle-host-waiting');
+
+    connectWS();
+  } catch (e) {
+    alert('Erreur lors de la création : ' + e.message);
+  }
+  btn.textContent = 'Créer la battle →';
+  btn.disabled = false;
+}
+
+function addBattleHostPlayer(name) {
+  if (battleHostPlayers.includes(name)) return;
+  battleHostPlayers.push(name);
+  document.getElementById('battle-host-count').textContent = battleHostPlayers.length;
+  const list = document.getElementById('battle-host-players');
+  if (list.querySelector('div[style*="En attente"]')) list.innerHTML = '';
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:0.85rem;';
+  row.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:var(--green);"></span>${name}`;
+  list.appendChild(row);
+}
+
+async function hostStartBattle() {
+  const btn = document.getElementById('btn-host-start-battle');
+  btn.textContent = 'Lancement…';
+  btn.disabled = true;
+  await fetch(`${API}/sessions/${sessionCode}/battle/start`, { method: 'POST' });
+  // Le créateur reçoit battle_start via son propre WebSocket et enchaîne sur le jeu.
+}
+
 
 window.onload = () => {
   const params = new URLSearchParams(window.location.search);
@@ -916,7 +1168,7 @@ async function loadSoloQuestion() {
   }
 
   const bq = soloQuestions[soloIndex];
-  const timeLimitSec = soloTimerEnabled ? (bq.time_limit_seconds || 30) : null;
+  const timeLimitSec = soloTimerEnabled ? (bq.time_limit_seconds || 60) : null;
 
   const res = await fetch(`${API}/sessions/${sessionCode}/questions`, {
     method: 'POST',
@@ -959,7 +1211,13 @@ function connectWS() {
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
 
-    if (msg.type === 'question_start') {
+    if (msg.type === 'participant_join') {
+      // Le créateur de battle voit les joueurs arriver dans sa salle d'attente
+      if (isBattleHost && document.getElementById('screen-battle-host-waiting').classList.contains('active')) {
+        addBattleHostPlayer(msg.display_name || 'Anonyme');
+      }
+
+    } else if (msg.type === 'question_start') {
       // Mode live classique. Garde-fou : si on a déjà répondu à CETTE question
       // (reconnexion après coup), on ne réaffiche pas la grille de réponse.
       const qid = msg.question_id;
