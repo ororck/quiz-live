@@ -1,5 +1,22 @@
+# Environnement
 .venv/
 __pycache__/
 *.pyc
+
+# Bases et données locales
 *.db
+quiz.db
+questions_export.json
+all_questions_final.json
+
+# Secrets
 .env
+*.env
+
+# Scripts de seed locaux (host en clair)
+seed_db.py
+import_to_postgres.py
+export_questions.py
+
+# Sources de questions (volumineux, gardés en local)
+docs/
