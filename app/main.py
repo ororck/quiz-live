@@ -499,6 +499,43 @@ async def battle_force_ranking(code: str):
 async def websocket_endpoint(websocket: WebSocket, session_code: str):
     await manager.connect(websocket, session_code)
     try:
+        # Rejoindre/reconnexion en cours de route : on renvoie l'état courant
+        # UNIQUEMENT à ce client, pour qu'il rattrape la question active.
+        s = sessions.get(session_code)
+        if s:
+            # Mode live : une question active à la fois -> on la rejoue
+            for q in s.questions.values():
+                if q.status == "active" and s.mode != "battle":
+                    await websocket.send_text(json.dumps({
+                        "type": "question_start",
+                        "question_id": q.id,
+                        "order_index": q.order_index,
+                        "num_choices": q.num_choices,
+                        "time_limit_seconds": q.time_limit_seconds,
+                        "started_at": q.started_at.isoformat() if q.started_at else None,
+                        "question_text": q.question_text,
+                        "choices_text": q.choices_text,
+                    }))
+                    break
+
+            # Mode battle déjà lancé : on rejoue tout le set à ce client
+            if s.mode == "battle" and s.status == "active" and s.battle_started_at:
+                ordered = sorted(s.questions.values(), key=lambda q: q.order_index)
+                questions_payload = [{
+                    "question_id": q.id,
+                    "order_index": q.order_index,
+                    "num_choices": q.num_choices,
+                    "correct_choices": q.correct_choices,
+                    "question_text": q.question_text,
+                    "choices_text": q.choices_text,
+                } for q in ordered]
+                await websocket.send_text(json.dumps({
+                    "type": "battle_start",
+                    "time_limit_seconds": s.battle_time_limit_seconds,
+                    "started_at": s.battle_started_at.isoformat(),
+                    "questions": questions_payload,
+                }))
+
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:

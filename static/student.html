@@ -943,14 +943,30 @@ async function loadSoloQuestion() {
 
 // ------- WEBSOCKET -------
 
+let wsShouldReconnect = true;   // passe à false quand la session est finie
+let wsReconnectDelay = 1000;    // backoff léger, plafonné
+let battleAlreadyStarted = false; // évite qu'un replay battle_start ne remette à zéro
+
 function connectWS() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/${sessionCode}`);
+
+  ws.onopen = () => {
+    // Connexion rétablie : on remet le délai de reconnexion à zéro
+    wsReconnectDelay = 1000;
+  };
+
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
 
     if (msg.type === 'question_start') {
-      // Mode live classique
+      // Mode live classique. Garde-fou : si on a déjà répondu à CETTE question
+      // (reconnexion après coup), on ne réaffiche pas la grille de réponse.
+      const qid = msg.question_id;
+      if (currentQuestion && (currentQuestion.question_id === qid) &&
+          document.getElementById('screen-result').classList.contains('active')) {
+        return; // on a déjà répondu, on reste sur l'écran résultat
+      }
       currentQuestion = msg;
       const qTextEl = document.getElementById('q-text');
       if (msg.question_text) {
@@ -963,17 +979,32 @@ function connectWS() {
       showScreen('screen-question');
 
     } else if (msg.type === 'question_reveal') {
-      // Mode live classique
       showResultFromReveal(msg);
 
     } else if (msg.type === 'battle_start') {
-      // Mode battle : on reçoit tout le set d'un coup
+      // Garde-fou : ne démarre la battle qu'une seule fois.
+      // Un replay reçu à la reconnexion est ignoré pour ne pas revenir à Q1.
+      if (battleAlreadyStarted) return;
+      battleAlreadyStarted = true;
       startBattleGame(msg);
 
     } else if (msg.type === 'battle_ranking') {
-      // Classement final reçu (déclenché par le dernier joueur ou par le host)
       showBattleRanking(msg.ranking);
     }
+  };
+
+  ws.onclose = () => {
+    // Reconnexion automatique tant que la session n'est pas terminée.
+    if (!wsShouldReconnect) return;
+    setTimeout(() => {
+      connectWS();
+    }, wsReconnectDelay);
+    wsReconnectDelay = Math.min(wsReconnectDelay * 1.5, 8000); // backoff plafonné à 8s
+  };
+
+  ws.onerror = () => {
+    // onclose sera appelé juste après, c'est lui qui gère la reconnexion.
+    try { ws.close(); } catch (_) {}
   };
 }
 
@@ -1413,7 +1444,8 @@ function startBattleGlobalTimer() {
 }
 
 function showBattleRanking(ranking) {
-  // Arrêter le timer si encore actif
+  // Session terminée : on coupe la reconnexion auto et le timer.
+  wsShouldReconnect = false;
   clearInterval(battleGlobalTimerInterval);
 
   const medals = ['🥇','🥈','🥉'];
