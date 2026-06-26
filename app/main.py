@@ -105,8 +105,20 @@ class ConnectionManager:
             self.active[session_code].remove(websocket)
 
     async def broadcast(self, session_code: str, message: dict):
+        payload = json.dumps(message)
+        dead = []
         for ws in self.active.get(session_code, []):
-            await ws.send_text(json.dumps(message))
+            try:
+                await ws.send_text(payload)
+            except Exception:
+                # WS mort ou en cours de fermeture : on le marque sans bloquer les autres
+                dead.append(ws)
+        # Nettoyage des connexions mortes
+        for ws in dead:
+            try:
+                self.active[session_code].remove(ws)
+            except (KeyError, ValueError):
+                pass
 
 
 manager = ConnectionManager()

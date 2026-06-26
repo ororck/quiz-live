@@ -990,6 +990,8 @@ async function hostStartBattle() {
 window.onload = () => {
   const params = new URLSearchParams(window.location.search);
   if (params.get('session')) showJoin();
+  updateModuleCount();
+  updateBattleModuleCount();
 };
 
 // ------- JOIN LIVE / BATTLE -------
@@ -1046,7 +1048,7 @@ function toggleModule(el) {
 }
 
 function updateModuleCount() {
-  const selected = document.querySelectorAll('.module-chip.selected-chip').length;
+  const selected = document.querySelectorAll('#module-grid .module-chip.selected-chip').length;
   document.getElementById('module-count-label').textContent = `(${selected} sélectionné${selected > 1 ? 's' : ''})`;
 }
 
@@ -1083,7 +1085,7 @@ function markSeen(key, id) {
 }
 
 function getSelectedCategories() {
-  const chips = document.querySelectorAll('.module-chip.selected-chip');
+  const chips = document.querySelectorAll('#module-grid .module-chip.selected-chip');
   const cats = [];
   chips.forEach(chip => {
     const chipCats = JSON.parse(chip.dataset.cats);
