@@ -813,6 +813,7 @@ let battleIndex = 0;          // index de la question en cours
 let battleCorrect = 0;        // bonnes réponses accumulées
 let battleSelectedChoices = new Set();
 let battleGlobalTimerInterval = null;
+let battleTimeUp = false;   // passe à true quand le timer global expire
 let battleStartedAt = null;   // Date JS de début
 let battleTimeLimitSec = null;
 let battleDisplayName = '';
@@ -1521,6 +1522,7 @@ function startBattleGame(msg) {
   battleQuestions = msg.questions;  // liste ordonnée, corrects inclus
   battleIndex = 0;
   battleCorrect = 0;
+  battleTimeUp = false;
   battleTimeLimitSec = msg.time_limit_seconds || null;
   battleStartedAt = new Date(msg.started_at);
 
@@ -1644,8 +1646,12 @@ async function battleSubmitAnswer() {
 
   if (answer.is_correct) battleCorrect++;
 
-  // Passer à la question suivante après 1.2s
+  // Passer à la question suivante après 1.2s, sauf si le temps global est écoulé
   setTimeout(() => {
+    if (battleTimeUp) {
+      finishBattle();   // temps écoulé : on termine au lieu de continuer
+      return;
+    }
     battleIndex++;
     loadBattleQuestion();
   }, 1200);
@@ -1702,11 +1708,13 @@ function startBattleGlobalTimer() {
 
     if (remaining <= 0) {
       clearInterval(battleGlobalTimerInterval);
-      // Temps écoulé : soumettre automatiquement si une question est en cours
+      battleTimeUp = true;   // signale à battleSubmitAnswer de terminer après soumission
+      // Temps écoulé : soumettre la question en cours puis finir
       if (battleIndex < battleQuestions.length) {
-        // Forcer une réponse vide si rien n'est sélectionné
         if (battleSelectedChoices.size === 0) battleSelectedChoices.add(-1);
         battleSubmitAnswer();
+      } else {
+        finishBattle();
       }
     }
   };
