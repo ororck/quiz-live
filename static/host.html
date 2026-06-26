@@ -649,6 +649,12 @@
 
 <script>
 const API = 'https://quiz-live.yellowwater-50afcb73.swedencentral.azurecontainerapps.io';
+
+// Échappe le HTML pour prévenir les injections (prénoms, etc.)
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 let sessionCode = null;
 let sessionId = null;
 let currentQuestion = null;
@@ -1183,7 +1189,7 @@ function addParticipant(data) {
   if (list.querySelector('.empty-state')) list.innerHTML = '';
   const item = document.createElement('div');
   item.className = 'participant-item';
-  item.innerHTML = `<span class="participant-dot"></span>${data.display_name || 'Anonyme'}`;
+  item.innerHTML = `<span class="participant-dot"></span>${escapeHtml(data.display_name || 'Anonyme')}`;
   list.appendChild(item);
 }
 
