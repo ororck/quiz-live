@@ -776,7 +776,7 @@
 <div class="screen" id="screen-battle-ranking">
   <div class="logo">QUIZ_LIVE</div>
   <div class="card" style="gap:12px;display:flex;flex-direction:column;">
-    <div class="battle-badge-pill">⚔️ CLASSEMENT FINAL</div>
+    <div class="battle-badge-pill" id="student-ranking-title">⚔️ CLASSEMENT FINAL</div>
     <h2 style="margin-top:8px;">Résultats Battle</h2>
   </div>
   <div class="card" style="gap:10px;display:flex;flex-direction:column;">
@@ -1262,7 +1262,9 @@ function connectWS() {
       startBattleGame(msg);
 
     } else if (msg.type === 'battle_ranking') {
-      showBattleRanking(msg.ranking);
+      showBattleRanking(msg.ranking, false);
+    } else if (msg.type === 'battle_ranking_update') {
+      showBattleRanking(msg.ranking, true);
     }
   };
 
@@ -1723,15 +1725,19 @@ function startBattleGlobalTimer() {
   battleGlobalTimerInterval = setInterval(tick, 1000);
 }
 
-function showBattleRanking(ranking) {
-  // Session terminée : on coupe la reconnexion auto et le timer.
-  wsShouldReconnect = false;
-  clearInterval(battleGlobalTimerInterval);
+function showBattleRanking(ranking, isLive) {
+  if (!isLive) {
+    // Classement final : on coupe la reconnexion auto et le timer.
+    wsShouldReconnect = false;
+    clearInterval(battleGlobalTimerInterval);
+  }
 
   const medals = ['🥇','🥈','🥉'];
   const classes = ['gold','silver','bronze'];
   const table = document.getElementById('student-ranking-table');
   table.innerHTML = '';
+
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   ranking.forEach((entry, i) => {
     const row = document.createElement('div');
@@ -1745,12 +1751,17 @@ function showBattleRanking(ranking) {
 
     row.innerHTML = `
       <span class="ranking-pos">${medals[i] || '#' + (i + 1)}</span>
-      <span class="ranking-name">${entry.display_name}${isMe ? ' 👤' : ''}</span>
+      <span class="ranking-name">${esc(entry.display_name)}${isMe ? ' 👤' : ''}</span>
       <span class="ranking-score">${entry.score}/${entry.total}</span>
       <span class="ranking-time">${timeStr}</span>
     `;
     table.appendChild(row);
   });
+
+  const titleEl = document.getElementById('student-ranking-title');
+  if (titleEl) {
+    titleEl.textContent = isLive ? '⚔️ CLASSEMENT EN COURS…' : '⚔️ CLASSEMENT FINAL';
+  }
 
   showScreen('screen-battle-ranking');
 }

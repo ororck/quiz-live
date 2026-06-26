@@ -395,6 +395,41 @@ def _battle_ranking(s: SessionState) -> list[schemas.BattleRankEntry]:
     return entries
 
 
+def _battle_ranking_final(s: SessionState) -> list[schemas.BattleRankEntry]:
+    """Classement complet : tout le roster. Les non-finisseurs ont leur
+    score partiel (questions non répondues = fausses) et le temps max
+    (chrono global ou temps écoulé) pour finir derrière les finisseurs."""
+    # Temps de référence pour les abandons : chrono global, sinon temps écoulé
+    if s.battle_time_limit_seconds:
+        max_elapsed = float(s.battle_time_limit_seconds)
+    elif s.battle_started_at:
+        max_elapsed = (datetime.now(timezone.utc) - s.battle_started_at).total_seconds()
+    else:
+        max_elapsed = 0.0
+
+    entries = []
+    for pid in s.battle_roster:
+        if pid in s.finished:
+            info = s.finished[pid]
+            entries.append(schemas.BattleRankEntry(
+                display_name=s.participants.get(pid, "Anonyme"),
+                score=info["score"],
+                total=info["total"],
+                elapsed_seconds=info["elapsed"],
+            ))
+        else:
+            # Non-finisseur : score calculé sur le set complet, temps max
+            score, total = _battle_score(s, pid)
+            entries.append(schemas.BattleRankEntry(
+                display_name=s.participants.get(pid, "Anonyme"),
+                score=score,
+                total=total,
+                elapsed_seconds=max_elapsed,
+            ))
+    entries.sort(key=lambda e: (-e.score, e.elapsed_seconds))
+    return entries
+
+
 @app.post("/sessions/{code}/battle/setup")
 def battle_setup(code: str, payload: schemas.BattleSetup):
     s = sessions.get(code)
@@ -469,14 +504,21 @@ async def battle_finish(code: str, payload: schemas.BattleFinish):
         "finished_at": datetime.now(timezone.utc),
     }
 
-    # Le dernier joueur du roster à finir déclenche le classement global
+    # Le dernier joueur du roster à finir déclenche le classement final.
+    # Sinon, on pousse un classement LIVE partiel (ceux qui ont déjà fini).
     all_finished = set(s.battle_roster).issubset(s.finished.keys())
     ranking = None
     if all_finished:
-        ranking = _battle_ranking(s)
+        ranking = _battle_ranking_final(s)
         await manager.broadcast(code, {
             "type": "battle_ranking",
             "ranking": [e.model_dump() for e in ranking],
+        })
+    else:
+        live = _battle_ranking(s)
+        await manager.broadcast(code, {
+            "type": "battle_ranking_update",
+            "ranking": [e.model_dump() for e in live],
         })
 
     return schemas.BattleResult(
@@ -491,11 +533,12 @@ async def battle_finish(code: str, payload: schemas.BattleFinish):
 
 @app.post("/sessions/{code}/battle/ranking", response_model=list[schemas.BattleRankEntry])
 async def battle_force_ranking(code: str):
-    """Échappatoire : si un joueur abandonne, force l'affichage du classement avec ceux qui ont fini."""
+    """Échappatoire : force le classement FINAL complet (inclut les non-finisseurs
+    avec leur score partiel et le temps max)."""
     s = sessions.get(code)
     if not s:
         raise HTTPException(404, "Session introuvable")
-    ranking = _battle_ranking(s)
+    ranking = _battle_ranking_final(s)
     await manager.broadcast(code, {
         "type": "battle_ranking",
         "ranking": [e.model_dump() for e in ranking],

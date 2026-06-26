@@ -549,16 +549,16 @@
 
       <!-- Classement en temps réel (se remplit quand les joueurs finissent) -->
       <div id="battle-ranking-section" style="display:none;">
-        <div style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;margin-bottom:10px;">CLASSEMENT FINAL</div>
+        <div id="battle-ranking-title" style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;margin-bottom:10px;">CLASSEMENT FINAL</div>
         <div class="ranking-table" id="battle-ranking-table"></div>
-        <button class="btn btn-ghost btn-sm" onclick="forceRanking()" style="margin-top:12px;">
-          Forcer le classement (si quelqu'un a abandonné)
+        <button class="btn btn-primary btn-sm" onclick="location.reload()" style="margin-top:12px;">
+          Relancer une session
         </button>
       </div>
 
       <div id="battle-ranking-waiting" style="color:var(--muted);font-size:0.85rem;margin-top:8px;">
         Le classement apparaîtra ici quand tous les joueurs auront terminé.
-        <br><button class="btn btn-ghost btn-sm" onclick="forceRanking()" style="margin-top:10px;">Forcer maintenant</button>
+        <br><button class="btn btn-ghost btn-sm" onclick="forceRanking()" style="margin-top:10px;">Clôturer la battle</button>
       </div>
     </div>
 
@@ -1083,11 +1083,13 @@ async function forceRanking() {
   await fetch(`${API}/sessions/${battleSessionCode}/battle/ranking`, { method: 'POST' });
 }
 
-function showBattleRanking(ranking) {
+function showBattleRanking(ranking, isLive) {
   const medals = ['🥇','🥈','🥉'];
   const classes = ['gold','silver','bronze'];
   const table = document.getElementById('battle-ranking-table');
   table.innerHTML = '';
+
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   ranking.forEach((entry, i) => {
     const row = document.createElement('div');
@@ -1098,7 +1100,7 @@ function showBattleRanking(ranking) {
     const timeStr = min > 0 ? `${min}m${sec.toString().padStart(2,'0')}s` : `${sec}s`;
     row.innerHTML = `
       <span class="ranking-pos">${medals[i] || '#' + (i + 1)}</span>
-      <span class="ranking-name">${entry.display_name}</span>
+      <span class="ranking-name">${esc(entry.display_name)}</span>
       <span class="ranking-score">${entry.score}/${entry.total}</span>
       <span class="ranking-time">${timeStr}</span>
     `;
@@ -1107,6 +1109,12 @@ function showBattleRanking(ranking) {
 
   document.getElementById('battle-ranking-waiting').style.display = 'none';
   document.getElementById('battle-ranking-section').style.display = 'block';
+
+  // Indicateur live vs final
+  const titleEl = document.getElementById('battle-ranking-title');
+  if (titleEl) {
+    titleEl.textContent = isLive ? 'Classement en cours…' : 'Classement final';
+  }
 }
 
 // ------- SESSION (live) -------
@@ -1158,7 +1166,9 @@ function connectWS() {
       answerCount = msg.total_answers;
       document.getElementById('answer-count-num').textContent = answerCount;
     } else if (msg.type === 'battle_ranking') {
-      showBattleRanking(msg.ranking);
+      showBattleRanking(msg.ranking, false);
+    } else if (msg.type === 'battle_ranking_update') {
+      showBattleRanking(msg.ranking, true);
     }
   };
 }
