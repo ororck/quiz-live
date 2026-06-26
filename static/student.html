@@ -433,6 +433,12 @@
         <div class="module-chip selected-chip" data-cats='["az-900-module-4-mcq","az-900-module-4-scenario"]' onclick="toggleModule(this)">
           <span>Module 4</span><small>Storage</small>
         </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-5-mcq","az-900-module-5-scenario"]' onclick="toggleModule(this)">
+          <span>Module 5</span><small>Identity & Security</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-6-mcq","az-900-module-6-scenario"]' onclick="toggleModule(this)">
+          <span>Module 6</span><small>Governance & Monitoring</small>
+        </div>
         <div class="module-chip selected-chip" data-cats='["az-900"]' onclick="toggleModule(this)" style="grid-column:span 2;">
           <span>📚 AZ-900 Original</span><small>484 questions</small>
         </div>
@@ -506,6 +512,12 @@
         </div>
         <div class="module-chip selected-chip" data-cats='["az-900-module-4-mcq","az-900-module-4-scenario"]' onclick="toggleBattleModule(this)">
           <span>Module 4</span><small>Storage</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-5-mcq","az-900-module-5-scenario"]' onclick="toggleBattleModule(this)">
+          <span>Module 5</span><small>Identity & Security</small>
+        </div>
+        <div class="module-chip selected-chip" data-cats='["az-900-module-6-mcq","az-900-module-6-scenario"]' onclick="toggleBattleModule(this)">
+          <span>Module 6</span><small>Governance & Monitoring</small>
         </div>
         <div class="module-chip" data-cats='["az-900"]' onclick="toggleBattleModule(this)" style="grid-column:span 2;">
           <span>📚 AZ-900 Original</span><small>484 questions</small>
@@ -1187,7 +1199,7 @@ async function loadSoloQuestion() {
   currentQuestion = { ...q, correct_choices_real: bq.correct_choices, bank_question: bq };
 
   const qText = document.getElementById('q-text');
-  qText.textContent = bq.text;
+  qText.innerHTML = renderText(bq.text);
   qText.style.display = 'block';
 
   renderQuestion(bq.num_choices, timeLimitSec, soloIndex + 1, bq.choices_text, bq.correct_choices.length);
@@ -1228,7 +1240,7 @@ function connectWS() {
       currentQuestion = msg;
       const qTextEl = document.getElementById('q-text');
       if (msg.question_text) {
-        qTextEl.textContent = msg.question_text;
+        qTextEl.innerHTML = renderText(msg.question_text);
         qTextEl.style.display = 'block';
       } else {
         qTextEl.style.display = 'none';
@@ -1534,7 +1546,7 @@ function loadBattleQuestion() {
   document.getElementById('bq-score-live').textContent = `${battleCorrect} / ${battleIndex}`;
 
   // Texte de la question
-  document.getElementById('bq-text').textContent = q.question_text || '';
+  document.getElementById('bq-text').innerHTML = renderText(q.question_text || '');
 
   // Reset sélection
   battleSelectedChoices.clear();
@@ -1731,6 +1743,18 @@ function showBattleRanking(ranking) {
   });
 
   showScreen('screen-battle-ranking');
+}
+
+// Affiche un énoncé structuré (contexte + requirements + question)
+// Échappe le HTML pour éviter le XSS, convertit \n en <br>
+function renderText(text) {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return escaped
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>');
 }
 
 </script>
