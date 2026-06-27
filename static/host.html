@@ -902,7 +902,7 @@ function renderBankQueue() {
     const next = bankQueue[0];
     const card = document.createElement('div');
     card.style.cssText = 'padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:0.9rem;line-height:1.5;';
-    card.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:0.7rem;margin-bottom:6px;">PROCHAINE QUESTION</div>${next.text}<div style="margin-top:8px;font-size:0.75rem;color:var(--muted);font-family:var(--mono);">${next.num_choices} choix · correct: ${(next.correct_choices||[]).map(i=>['A','B','C','D','E','F'][i]).join(', ')}</div>`;
+    card.innerHTML = `<div style="color:var(--muted);font-family:var(--mono);font-size:0.7rem;margin-bottom:6px;">PROCHAINE QUESTION</div>${next.text}<div style="margin-top:8px;font-size:0.75rem;color:var(--muted);font-family:var(--mono);">${next.num_choices} choix</div>`;
     panel.appendChild(card);
 
     const btn = document.createElement('button');
@@ -957,8 +957,9 @@ async function launchNextFromQueue() {
     div.id = 'host-choices-display';
     div.style.cssText = 'display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:0.85rem;';
     q.choices_text.forEach((txt, i) => {
-      const isCorrect = q.correct_choices.includes(i);
-      div.innerHTML += `<div style="padding:8px 12px;border-radius:6px;background:var(--bg);border:1px solid ${isCorrect ? 'var(--green)' : 'var(--border)'};color:${isCorrect ? 'var(--green)' : 'var(--text)'};">${letters[i]}. ${txt}</div>`;
+      // Pas de coloration de la bonne réponse ici : on ne révèle rien tant que
+      // le formateur n'a pas cliqué "Révéler les résultats" (écran suivant).
+      div.innerHTML += `<div style="padding:8px 12px;border-radius:6px;background:var(--bg);border:1px solid var(--border);color:var(--text);">${letters[i]}. ${txt}</div>`;
     });
     hostQ.insertBefore(div, hostQ.querySelector('.answer-count'));
   }
@@ -1323,11 +1324,12 @@ function showStats(stats) {
     const count = stats.choices_breakdown[i] || 0;
     const pct = Math.round((count / total) * 100);
     const isCorrect = selectedCorrect.has(i);
+    const choiceText = (currentQuestion.choices_text && currentQuestion.choices_text[i]) || '';
 
     bars.innerHTML += `
       <div class="stat-bar-item">
         <div class="stat-bar-label">
-          <span class="letter">${letters[i]}${isCorrect ? ' ✓' : ''}</span>
+          <span class="letter" style="${isCorrect ? 'color:var(--green);font-weight:600;' : ''}">${letters[i]}. ${choiceText}${isCorrect ? ' ✓' : ''}</span>
           <span class="count">${count} rép.</span>
         </div>
         <div class="stat-bar-track">
