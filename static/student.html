@@ -461,6 +461,12 @@
       </div>
     </div>
 
+    <!-- Nombre de questions -->
+    <div class="field">
+      <label>Nombre de questions <span style="font-size:0.75rem;color:var(--muted);">(vide = toutes)</span></label>
+      <input type="number" id="solo-count" placeholder="ex: 20" min="1" max="500">
+    </div>
+
     <!-- Mode chrono -->
     <div class="field">
       <label>Chrono</label>
@@ -1145,6 +1151,13 @@ async function startSolo() {
   }
 
   soloQuestions = shuffle(questions);
+
+  // Plafonner au nombre de questions demandé (vide = toutes)
+  const countInput = document.getElementById('solo-count').value.trim();
+  const maxCount = countInput ? parseInt(countInput, 10) : 0;
+  if (maxCount > 0 && soloQuestions.length > maxCount) {
+    soloQuestions = soloQuestions.slice(0, maxCount);
+  }
 
   if (soloQuestions.length === 0) {
     alert('Aucune question disponible pour cette sélection.');

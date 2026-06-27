@@ -282,6 +282,15 @@
   .chip-green { background: rgba(34,217,138,0.1); color: var(--green); border: 1px solid var(--green); }
   .chip-red { background: rgba(255,92,92,0.1); color: var(--red); border: 1px solid var(--red); }
 
+  /* Sélection rapide par modules */
+  .module-chip { padding: 14px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; background: var(--card); transition: all 0.15s; }
+  .module-chip:hover { border-color: var(--accent); }
+  .module-chip.selected-chip { border-color: var(--accent); background: rgba(124,108,255,0.12); }
+  .module-chip span { display: block; font-weight: 600; font-size: 0.9rem; }
+  .module-chip small { color: var(--muted); font-size: 0.75rem; }
+  .type-btn { flex: 1; padding: 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: center; font-size: 0.85rem; background: var(--card); transition: all 0.15s; }
+  .type-btn.selected-type { border-color: var(--accent); background: rgba(124,108,255,0.12); color: var(--accent); font-weight: 600; }
+
   /* SIDEBAR */
   .sidebar { display: flex; flex-direction: column; gap: 20px; }
 
@@ -447,35 +456,37 @@
       </div>
     </div>
 
-    <!-- BANK PICKER (mode live) -->
+    <!-- SÉLECTION RAPIDE PAR MODULES (mode live) -->
     <div id="bank-screen" class="panel" style="display:none;">
-      <div class="panel-title">SÉLECTION DEPUIS LA BANQUE</div>
-      <div class="bank-filters">
-        <select id="bank-cat">
-          <option value="">-- Toutes catégories --</option>
-          <option value="az-900">AZ-900 (original)</option>
-          <option value="az-900-module-1-mcq">Module 1 — MCQ</option>
-          <option value="az-900-module-1-scenario">Module 1 — Scénario</option>
-          <option value="az-900-module-2-mcq">Module 2 — MCQ</option>
-          <option value="az-900-module-2-scenario">Module 2 — Scénario</option>
-          <option value="az-900-module-3-mcq">Module 3 — MCQ</option>
-          <option value="az-900-module-3-scenario">Module 3 — Scénario</option>
-          <option value="az-900-module-4-mcq">Module 4 — MCQ</option>
-          <option value="az-900-module-4-scenario">Module 4 — Scénario</option>
-          <option value="az-900-module-5-mcq">Module 5 — MCQ</option>
-          <option value="az-900-module-5-scenario">Module 5 — Scénario</option>
-          <option value="az-900-module-6-mcq">Module 6 — MCQ</option>
-          <option value="az-900-module-6-scenario">Module 6 — Scénario</option>
-        </select>
-        <button class="btn btn-ghost btn-sm" onclick="loadBankQuestions()">Charger</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleSelectAll()">Tout sélectionner</button>
-        <button class="btn btn-ghost btn-sm" onclick="closeBankPicker()">Annuler</button>
+      <div class="panel-title">PRÉPARER UN QUIZ EN GROUPE</div>
+
+      <label style="font-size:0.8rem;color:var(--muted);">Modules <span id="bank-module-count" style="color:var(--accent);">(0 sélectionné)</span></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 16px;" id="bank-module-grid">
+        <div class="module-chip" data-mod="1" onclick="toggleBankModule(this)"><span>Module 1</span><small>Cloud Concepts</small></div>
+        <div class="module-chip" data-mod="2" onclick="toggleBankModule(this)"><span>Module 2</span><small>Architecture & Compute</small></div>
+        <div class="module-chip" data-mod="3" onclick="toggleBankModule(this)"><span>Module 3</span><small>Networking</small></div>
+        <div class="module-chip" data-mod="4" onclick="toggleBankModule(this)"><span>Module 4</span><small>Storage</small></div>
+        <div class="module-chip" data-mod="5" onclick="toggleBankModule(this)"><span>Module 5</span><small>Identity & Security</small></div>
+        <div class="module-chip" data-mod="6" onclick="toggleBankModule(this)"><span>Module 6</span><small>Governance & Monitoring</small></div>
+        <div class="module-chip" data-mod="az-900" onclick="toggleBankModule(this)" style="grid-column:span 2;"><span>AZ-900 Original</span><small>484 questions</small></div>
       </div>
-      <div id="bank-loading" style="display:none">Chargement…</div>
-      <div id="bank-question-list"></div>
+
+      <label style="font-size:0.8rem;color:var(--muted);">Type de questions</label>
+      <div style="display:flex;gap:8px;margin:8px 0 16px;">
+        <div class="type-btn selected-type" id="bank-type-mix" onclick="selectBankType('mix')">Mix</div>
+        <div class="type-btn" id="bank-type-mcq" onclick="selectBankType('mcq')">MCQ</div>
+        <div class="type-btn" id="bank-type-scenario" onclick="selectBankType('scenario')">Scénarios</div>
+      </div>
+
+      <label style="font-size:0.8rem;color:var(--muted);">Questions aléatoires par module <span style="color:var(--muted);">(vide = toutes)</span></label>
+      <input type="number" id="bank-per-module" placeholder="ex: 15" min="1" max="60" style="margin:8px 0 16px;" oninput="updateBankPreview()">
+
       <div class="bank-toolbar">
-        <div class="bank-count"><span id="bank-selected-count">0</span> question(s) sélectionnée(s)</div>
-        <button class="btn btn-primary" onclick="launchFromBank()">Lancer la session →</button>
+        <div class="bank-count"><span id="bank-preview-count">0</span> question(s) au total</div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="closeBankPicker()">Annuler</button>
+          <button class="btn btn-primary" onclick="launchFromBank()">Lancer la session →</button>
+        </div>
       </div>
     </div>
 
@@ -710,9 +721,8 @@ renderChoicesGrid();
 
 // ------- BANK PICKER (mode live) -------
 
-let bankQuestions = [];
-let bankSelected = new Set();
 let bankQueue = [];
+let bankSelectedModules = new Set();
 
 function openBankPicker() {
   document.getElementById('setup-screen').style.display = 'none';
@@ -726,67 +736,98 @@ function closeBankPicker() {
   document.getElementById('setup-screen').style.flexDirection = 'column';
 }
 
-async function loadBankQuestions() {
-  const cat = document.getElementById('bank-cat').value;
-  const loading = document.getElementById('bank-loading');
-  const list = document.getElementById('bank-question-list');
-  loading.style.display = 'block';
-  list.innerHTML = '';
-  bankQuestions = [];
-  bankSelected.clear();
-  updateBankCount();
+let bankType = 'mix';  // mix | mcq | scenario
 
-  const url = cat ? `${API}/bank/questions?category=${encodeURIComponent(cat)}` : `${API}/bank/questions`;
-  const res = await fetch(url);
-  bankQuestions = await res.json();
-  loading.style.display = 'none';
-  renderBankList();
+function toggleBankModule(chip) {
+  const mod = chip.dataset.mod;
+  if (bankSelectedModules.has(mod)) {
+    bankSelectedModules.delete(mod);
+    chip.classList.remove('selected-chip');
+  } else {
+    bankSelectedModules.add(mod);
+    chip.classList.add('selected-chip');
+  }
+  updateBankModuleCount();
+  updateBankPreview();
 }
 
-function renderBankList() {
-  const list = document.getElementById('bank-question-list');
-  list.innerHTML = '';
-  if (bankQuestions.length === 0) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:0.9rem;padding:16px 0;">Aucune question trouvée.</div>';
+function selectBankType(type) {
+  bankType = type;
+  document.getElementById('bank-type-mix').classList.toggle('selected-type', type === 'mix');
+  document.getElementById('bank-type-mcq').classList.toggle('selected-type', type === 'mcq');
+  document.getElementById('bank-type-scenario').classList.toggle('selected-type', type === 'scenario');
+  updateBankPreview();
+}
+
+function updateBankModuleCount() {
+  const n = bankSelectedModules.size;
+  document.getElementById('bank-module-count').textContent = `(${n} sélectionné${n > 1 ? 's' : ''})`;
+}
+
+// Construit la liste des catégories à charger selon modules + type choisis
+function bankCategories() {
+  const cats = [];
+  bankSelectedModules.forEach(mod => {
+    if (mod === 'az-900') { cats.push('az-900'); return; }
+    if (bankType === 'mix' || bankType === 'mcq') cats.push(`az-900-module-${mod}-mcq`);
+    if (bankType === 'mix' || bankType === 'scenario') cats.push(`az-900-module-${mod}-scenario`);
+  });
+  return cats;
+}
+
+// Met à jour l'aperçu du nombre total de questions (estimation rapide)
+async function updateBankPreview() {
+  const cats = bankCategories();
+  if (cats.length === 0) {
+    document.getElementById('bank-preview-count').textContent = '0';
     return;
   }
-  bankQuestions.forEach(q => {
-    const item = document.createElement('div');
-    item.className = 'bank-item' + (bankSelected.has(q.id) ? ' selected' : '');
-    item.innerHTML = `
-      <input type="checkbox" ${bankSelected.has(q.id) ? 'checked' : ''} onchange="toggleBankItem(${q.id}, this)">
-      <div>
-        <div class="bank-item-text">${q.text}</div>
-        <div class="bank-item-meta">${q.category || ''} · ${q.num_choices} choix · correct: ${(q.correct_choices||[]).map(i=>['A','B','C','D','E','F'][i]).join(', ')}</div>
-      </div>`;
-    item.onclick = (e) => { if (e.target.tagName !== 'INPUT') { const cb = item.querySelector('input'); cb.checked = !cb.checked; toggleBankItem(q.id, cb); } };
-    list.appendChild(item);
-  });
+  const perModule = parseInt(document.getElementById('bank-per-module').value, 10) || 0;
+  // Estimation : si perModule défini, c'est perModule × nb de modules ; sinon on charge pour compter
+  if (perModule > 0) {
+    document.getElementById('bank-preview-count').textContent = perModule * bankSelectedModules.size;
+  } else {
+    document.getElementById('bank-preview-count').textContent = '…';
+  }
 }
 
-function toggleBankItem(id, cb) {
-  if (cb.checked) bankSelected.add(id);
-  else bankSelected.delete(id);
-  const item = cb.closest('.bank-item');
-  item.classList.toggle('selected', cb.checked);
-  updateBankCount();
+// Pioche aléatoirement les questions selon modules + type + nombre par module
+async function pickBankQuestions() {
+  const perModule = parseInt(document.getElementById('bank-per-module').value, 10) || 0;
+  const picked = [];
+
+  // On traite chaque module séparément pour appliquer le "N par module"
+  for (const mod of bankSelectedModules) {
+    const cats = [];
+    if (mod === 'az-900') {
+      cats.push('az-900');
+    } else {
+      if (bankType === 'mix' || bankType === 'mcq') cats.push(`az-900-module-${mod}-mcq`);
+      if (bankType === 'mix' || bankType === 'scenario') cats.push(`az-900-module-${mod}-scenario`);
+    }
+
+    const results = await Promise.all(
+      cats.map(c => fetch(`${API}/bank/questions?category=${encodeURIComponent(c)}`).then(r => r.json()))
+    );
+    let modQuestions = results.flat();
+    shuffleArray(modQuestions);
+    if (perModule > 0) modQuestions = modQuestions.slice(0, perModule);
+    picked.push(...modQuestions);
+  }
+  return picked;
 }
 
-function toggleSelectAll() {
-  const allSelected = bankSelected.size === bankQuestions.length;
-  bankSelected.clear();
-  if (!allSelected) bankQuestions.forEach(q => bankSelected.add(q.id));
-  renderBankList();
-  updateBankCount();
-}
-
-function updateBankCount() {
-  document.getElementById('bank-selected-count').textContent = bankSelected.size;
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 async function launchFromBank() {
-  if (bankSelected.size === 0) {
-    alert('Sélectionne au moins une question.');
+  if (bankSelectedModules.size === 0) {
+    alert('Sélectionne au moins un module.');
     return;
   }
   const btn = document.querySelector('#bank-screen .btn-primary');
@@ -803,8 +844,15 @@ async function launchFromBank() {
   sessionCode = data.code;
   sessionId = data.id;
 
-  // 2. Préparer la file des questions sélectionnées
-  bankQueue = bankQuestions.filter(q => bankSelected.has(q.id));
+  // 2. Piocher les questions selon modules + type + nombre par module
+  bankQueue = await pickBankQuestions();
+  if (bankQueue.length === 0) {
+    alert('Aucune question trouvée pour cette sélection.');
+    btn.textContent = 'Lancer la session →';
+    btn.disabled = false;
+    return;
+  }
+  shuffleArray(bankQueue);  // mélange final tous modules confondus
 
   // 3. Afficher l'UI session
   document.getElementById('nav-code').textContent = sessionCode;
