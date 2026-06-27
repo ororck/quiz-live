@@ -1,0 +1,85 @@
+name: CI/CD — Build, Test, Prod
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write      # requis pour l'auth OIDC vers Azure
+  contents: read
+
+jobs:
+  # ─── 1. Build + push de l'image Docker ───────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: |
+            ororck/quiz-live:latest
+            ororck/quiz-live:${{ github.sha }}
+
+  # ─── 2. Déploiement automatique en TEST ──────────────────────────────
+  deploy-test:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to quiz-live-test
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az containerapp update \
+              --name quiz-live-test \
+              --resource-group msaidi \
+              --image ororck/quiz-live:${{ github.sha }} \
+              --revision-suffix sha${GITHUB_SHA::6} \
+              --min-replicas 1 --max-replicas 1
+
+  # ─── 3. Déploiement en PROD (après validation manuelle) ──────────────
+  deploy-prod:
+    needs: deploy-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production   # déclenche le gate "required reviewers"
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to quiz-live (prod)
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az containerapp update \
+              --name quiz-live \
+              --resource-group msaidi \
+              --image ororck/quiz-live:${{ github.sha }} \
+              --revision-suffix sha${GITHUB_SHA::6} \
+              --min-replicas 1 --max-replicas 1
