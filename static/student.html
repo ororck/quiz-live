@@ -397,10 +397,6 @@
   <div class="logo">QUIZ_LIVE</div>
   <div class="card" style="gap:16px;display:flex;flex-direction:column;">
     <h2>Mode solo</h2>
-    <div class="field">
-      <label>Ton prénom</label>
-      <input type="text" id="solo-name-input" placeholder="Mohamed" maxlength="24">
-    </div>
 
     <!-- Sélection de la certification -->
     <div class="field">
@@ -1106,7 +1102,7 @@ function getSelectedCategories() {
 }
 
 async function startSolo() {
-  const name = document.getElementById('solo-name-input').value.trim() || 'Joueur';
+  const name = 'Joueur';  // solo : pas de prénom demandé (joueur unique)
   const skipSeen = document.getElementById('skip-seen').checked;
   const categories = getSelectedCategories();
 
