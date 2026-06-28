@@ -69,30 +69,26 @@
       <h2>Créer une session <em>Battle</em></h2>
       <p>Chaque joueur avance à son rythme sur le même set de questions. Classement final par score, puis par temps.</p>
 
-      <!-- Sélection des questions (même filtre que le live) -->
-      <div class="bank-filters" style="margin-top:8px;">
-        <select id="battle-cat">
-          <option value="">-- Toutes catégories --</option>
-          <option value="az-900">AZ-900 (original)</option>
-          <option value="az-900-module-1-mcq">Module 1 — MCQ</option>
-          <option value="az-900-module-1-scenario">Module 1 — Scénario</option>
-          <option value="az-900-module-2-mcq">Module 2 — MCQ</option>
-          <option value="az-900-module-2-scenario">Module 2 — Scénario</option>
-          <option value="az-900-module-3-mcq">Module 3 — MCQ</option>
-          <option value="az-900-module-3-scenario">Module 3 — Scénario</option>
-          <option value="az-900-module-4-mcq">Module 4 — MCQ</option>
-          <option value="az-900-module-4-scenario">Module 4 — Scénario</option>
-          <option value="az-900-module-5-mcq">Module 5 — MCQ</option>
-          <option value="az-900-module-5-scenario">Module 5 — Scénario</option>
-          <option value="az-900-module-6-mcq">Module 6 — MCQ</option>
-          <option value="az-900-module-6-scenario">Module 6 — Scénario</option>
-        </select>
-        <button class="btn btn-ghost btn-sm" onclick="loadBattleQuestions()">Charger</button>
-        <button class="btn btn-ghost btn-sm" onclick="toggleBattleSelectAll()">Tout sélectionner</button>
+      <label style="font-size:0.8rem;color:var(--muted);">Modules <span id="battle-module-count" style="color:var(--accent);">(0 sélectionné)</span></label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 16px;" id="battle-module-grid">
+        <div class="module-chip" data-mod="1" onclick="toggleBattleModule(this)"><span>Module 1</span><small>Cloud Concepts</small></div>
+        <div class="module-chip" data-mod="2" onclick="toggleBattleModule(this)"><span>Module 2</span><small>Architecture & Compute</small></div>
+        <div class="module-chip" data-mod="3" onclick="toggleBattleModule(this)"><span>Module 3</span><small>Networking</small></div>
+        <div class="module-chip" data-mod="4" onclick="toggleBattleModule(this)"><span>Module 4</span><small>Storage</small></div>
+        <div class="module-chip" data-mod="5" onclick="toggleBattleModule(this)"><span>Module 5</span><small>Identity & Security</small></div>
+        <div class="module-chip" data-mod="6" onclick="toggleBattleModule(this)"><span>Module 6</span><small>Governance & Monitoring</small></div>
+        <div class="module-chip" data-mod="az-900" onclick="toggleBattleModule(this)" style="grid-column:span 2;"><span>AZ-900 Original</span><small>484 questions</small></div>
       </div>
 
-      <div id="battle-bank-loading" style="display:none;color:var(--muted);font-size:0.9rem;padding:16px 0;">Chargement…</div>
-      <div id="battle-question-list" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-top:4px;"></div>
+      <label style="font-size:0.8rem;color:var(--muted);">Type de questions</label>
+      <div style="display:flex;gap:8px;margin:8px 0 16px;">
+        <div class="type-btn selected-type" id="battle-type-mix" onclick="selectBattleType('mix')">Mix</div>
+        <div class="type-btn" id="battle-type-mcq" onclick="selectBattleType('mcq')">MCQ</div>
+        <div class="type-btn" id="battle-type-scenario" onclick="selectBattleType('scenario')">Scénarios</div>
+      </div>
+
+      <label style="font-size:0.8rem;color:var(--muted);">Questions aléatoires par module <span style="color:var(--muted);">(vide = toutes)</span></label>
+      <input type="number" id="battle-per-module" placeholder="ex: 15" min="1" max="60" style="margin:8px 0 16px;" oninput="updateBattlePreview()">
 
       <!-- Chrono global -->
       <div style="margin-top:8px;">
@@ -105,8 +101,8 @@
         </div>
       </div>
 
-      <div class="bank-toolbar" style="margin-top:4px;">
-        <div class="bank-count"><span id="battle-selected-count">0</span> question(s) sélectionnée(s)</div>
+      <div class="bank-toolbar" style="margin-top:16px;">
+        <div class="bank-count"><span id="battle-preview-count">0</span> question(s) au total</div>
         <div style="display:flex;gap:10px;">
           <button class="btn btn-ghost btn-sm" onclick="closeBattlePicker()">Annuler</button>
           <button class="btn btn-battle" onclick="launchBattle()">Créer la session Battle →</button>

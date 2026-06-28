@@ -307,8 +307,8 @@ async function launchNextFromQueue() {
 
 // ------- BATTLE PICKER -------
 
-let battleQuestions = [];
-let battleSelected = new Set();
+let battleSelectedModules = new Set();
+let battleType = 'mix';
 let battleTimerEnabled = false;
 let battleSessionCode = null;
 
@@ -332,67 +332,60 @@ function toggleBattleTimer() {
   document.getElementById('battle-timer-label-txt').textContent = battleTimerEnabled ? '' : 'Désactivé';
 }
 
-async function loadBattleQuestions() {
-  const cat = document.getElementById('battle-cat').value;
-  const loading = document.getElementById('battle-bank-loading');
-  const list = document.getElementById('battle-question-list');
-  loading.style.display = 'block';
-  list.innerHTML = '';
-  battleQuestions = [];
-  battleSelected.clear();
-  updateBattleCount();
-
-  const url = cat ? `${API}/bank/questions?category=${encodeURIComponent(cat)}` : `${API}/bank/questions`;
-  const res = await fetch(url);
-  battleQuestions = await res.json();
-  loading.style.display = 'none';
-  renderBattleList();
-}
-
-function renderBattleList() {
-  const list = document.getElementById('battle-question-list');
-  list.innerHTML = '';
-  if (battleQuestions.length === 0) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:0.9rem;padding:16px 0;">Aucune question trouvée.</div>';
-    return;
+function toggleBattleModule(chip) {
+  const mod = chip.dataset.mod;
+  if (battleSelectedModules.has(mod)) {
+    battleSelectedModules.delete(mod);
+    chip.classList.remove('selected-chip');
+  } else {
+    battleSelectedModules.add(mod);
+    chip.classList.add('selected-chip');
   }
-  battleQuestions.forEach(q => {
-    const item = document.createElement('div');
-    item.className = 'bank-item' + (battleSelected.has(q.id) ? ' selected' : '');
-    item.innerHTML = `
-      <input type="checkbox" ${battleSelected.has(q.id) ? 'checked' : ''} onchange="toggleBattleItem(${q.id}, this)">
-      <div>
-        <div class="bank-item-text">${q.text}</div>
-        <div class="bank-item-meta">${q.category || ''} · ${q.num_choices} choix</div>
-      </div>`;
-    item.onclick = (e) => { if (e.target.tagName !== 'INPUT') { const cb = item.querySelector('input'); cb.checked = !cb.checked; toggleBattleItem(q.id, cb); } };
-    list.appendChild(item);
-  });
+  const n = battleSelectedModules.size;
+  document.getElementById('battle-module-count').textContent = `(${n} sélectionné${n > 1 ? 's' : ''})`;
+  updateBattlePreview();
 }
 
-function toggleBattleItem(id, cb) {
-  if (cb.checked) battleSelected.add(id);
-  else battleSelected.delete(id);
-  const item = cb.closest('.bank-item');
-  item.classList.toggle('selected', cb.checked);
-  updateBattleCount();
+function selectBattleType(type) {
+  battleType = type;
+  document.getElementById('battle-type-mix').classList.toggle('selected-type', type === 'mix');
+  document.getElementById('battle-type-mcq').classList.toggle('selected-type', type === 'mcq');
+  document.getElementById('battle-type-scenario').classList.toggle('selected-type', type === 'scenario');
+  updateBattlePreview();
 }
 
-function toggleBattleSelectAll() {
-  const allSelected = battleSelected.size === battleQuestions.length;
-  battleSelected.clear();
-  if (!allSelected) battleQuestions.forEach(q => battleSelected.add(q.id));
-  renderBattleList();
-  updateBattleCount();
+function updateBattlePreview() {
+  const perModule = parseInt(document.getElementById('battle-per-module').value, 10) || 0;
+  const n = perModule > 0 ? perModule * battleSelectedModules.size : '…';
+  document.getElementById('battle-preview-count').textContent = n;
 }
 
-function updateBattleCount() {
-  document.getElementById('battle-selected-count').textContent = battleSelected.size;
+async function pickBattleQuestions() {
+  const perModule = parseInt(document.getElementById('battle-per-module').value, 10) || 0;
+  const picked = [];
+  for (const mod of battleSelectedModules) {
+    const cats = [];
+    if (mod === 'az-900') {
+      cats.push('az-900');
+    } else {
+      if (battleType === 'mix' || battleType === 'mcq') cats.push(`az-900-module-${mod}-mcq`);
+      if (battleType === 'mix' || battleType === 'scenario') cats.push(`az-900-module-${mod}-scenario`);
+    }
+    const results = await Promise.all(
+      cats.map(c => fetch(`${API}/bank/questions?category=${encodeURIComponent(c)}`).then(r => r.json()))
+    );
+    let modQs = results.flat();
+    shuffleArray(modQs);
+    if (perModule > 0) modQs = modQs.slice(0, perModule);
+    picked.push(...modQs);
+  }
+  shuffleArray(picked);
+  return picked;
 }
 
 async function launchBattle() {
-  if (battleSelected.size === 0) {
-    alert('Sélectionne au moins une question.');
+  if (battleSelectedModules.size === 0) {
+    alert('Sélectionne au moins un module.');
     return;
   }
   const btn = document.querySelector('#battle-screen .btn-battle');
@@ -409,8 +402,14 @@ async function launchBattle() {
   battleSessionCode = sData.code;
   sessionCode = sData.code;
 
-  // 2. Préparer le payload de setup
-  const selectedQs = battleQuestions.filter(q => battleSelected.has(q.id));
+  // 2. Piocher les questions selon modules + type + nombre par module
+  const selectedQs = await pickBattleQuestions();
+  if (selectedQs.length === 0) {
+    alert('Aucune question trouvée pour cette sélection.');
+    btn.textContent = 'Créer la session Battle →';
+    btn.disabled = false;
+    return;
+  }
   const timeLimitSec = battleTimerEnabled
     ? parseInt(document.getElementById('battle-timer-input').value) * 60
     : null;
