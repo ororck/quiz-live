@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - 'feat/**'
+      - develop
   pull_request:
     branches: [main]
 
@@ -37,10 +37,10 @@ jobs:
             ororck/quiz-live:latest
             ororck/quiz-live:${{ github.sha }}
 
-  # ─── 2. Deploy en TEST (branches feat/*) ─────────────────────────────
+  # ─── 2. Deploy en TEST (branche develop) ─────────────────────────────
   deploy-test:
     needs: build
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/feat/')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     steps:
       - name: Azure login (OIDC)
