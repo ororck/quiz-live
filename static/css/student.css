@@ -1,0 +1,349 @@
+/* ===== student.css — styles spécifiques à l'interface joueur ===== */
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+  }
+
+.screen { display: none; width: 100%; max-width: 480px; flex-direction: column; gap: 20px; }
+
+.screen.active { display: flex; }
+
+.logo {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+  }
+
+h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 8px; }
+
+p { color: var(--muted); font-size: 0.9rem; line-height: 1.6; }
+
+.field { display: flex; flex-direction: column; gap: 8px; }
+
+label { font-size: 0.82rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 1rem;
+    padding: 14px 16px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+
+input[type="text"]:focus { border-color: var(--accent); }
+
+.btn {
+    font-family: var(--sans);
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 14px 24px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    width: 100%;
+  }
+
+.btn:active { transform: scale(0.97); }
+
+.btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+
+.btn-confirm { background: var(--green); color: #000; font-weight: 700; }
+
+.waiting-icon {
+    font-size: 3rem;
+    text-align: center;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+0%,100% { opacity: 1; }
+
+50% { opacity: 0.4; }
+
+.session-badge {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    letter-spacing: 4px;
+  }
+
+/* SCORE CONTINU */
+  .score-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+.score-bar-item { text-align: center; }
+
+.score-bar-num {
+    font-family: var(--mono);
+    font-size: 1.3rem;
+    font-weight: 700;
+  }
+
+.score-bar-label { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+
+.score-pct {
+    font-family: var(--mono);
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+/* TIMER */
+  .timer-bar-wrap {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+.timer-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 1s linear, background 0.3s;
+  }
+
+.timer-bar.urgent { background: var(--red); }
+
+.timer-label {
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    transition: color 0.3s;
+  }
+
+.timer-label.urgent { color: var(--red); }
+
+/* CHOIX */
+  .choices-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+.choice-btn {
+    aspect-ratio: 1.5;
+    border-radius: 14px;
+    border: 2px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 2rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+.choice-btn:active { transform: scale(0.95); }
+
+.choice-btn:hover:not(:disabled) { border-color: var(--accent); background: rgba(124,106,255,0.08); }
+
+.choice-btn.selected { border-color: var(--accent); background: rgba(124,106,255,0.15); color: var(--accent); }
+
+.choice-btn.correct { border-color: var(--green); background: rgba(34,217,138,0.32); color: #eafff5; font-weight: 700; }
+
+.choice-btn.wrong { border-color: var(--red); background: rgba(255,92,92,0.28); color: #ffecec; opacity: 0.85; }
+
+.choice-btn:disabled { cursor: not-allowed; }
+
+.confirm-row { display: flex; gap: 10px; }
+
+.confirm-row .btn { flex: 1; }
+
+.result-icon { font-size: 4rem; text-align: center; }
+
+.result-title { font-size: 1.6rem; font-weight: 700; text-align: center; }
+
+.result-title.correct-text { color: var(--green); }
+
+.result-title.wrong-text { color: var(--red); }
+
+.result-sub { text-align: center; color: var(--muted); font-size: 0.9rem; }
+
+.score-row {
+    display: flex;
+    justify-content: space-around;
+    padding: 16px 0;
+  }
+
+.score-item { text-align: center; }
+
+.score-num { font-family: var(--mono); font-size: 2rem; font-weight: 700; }
+
+.score-num.green { color: var(--green); }
+
+.score-num.red { color: var(--red); }
+
+.score-label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+/* RECAP */
+  .recap-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    font-size: 0.85rem;
+  }
+
+.recap-item .q-text { color: var(--text); margin-bottom: 6px; line-height: 1.5; }
+
+.recap-item .correct-ans { color: var(--green); font-size: 0.8rem; }
+
+/* PROMPT IA */
+  .prompt-box {
+    background: var(--bg);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
+
+/* SOLO MODE */
+  .mode-cards { display: flex; flex-direction: column; gap: 12px; }
+
+.mode-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+.mode-card:hover { border-color: var(--accent); }
+
+.mode-icon { font-size: 2rem; }
+
+.mode-info h3 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+
+.mode-info p { font-size: 0.82rem; color: var(--muted); }
+
+.selected-theme { border-color: var(--accent) !important; background: rgba(124,106,255,0.08); }
+
+/* MODULE CHIPS */
+  .module-chip {
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+.module-chip span { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+
+.module-chip small { font-size: 0.72rem; color: var(--muted); }
+
+.module-chip.selected-chip { border-color: var(--accent); background: rgba(124,106,255,0.08); }
+
+.module-chip.selected-chip span { color: var(--accent); }
+
+.copy-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    font-family: var(--sans);
+    font-weight: 600;
+  }
+
+/* BATTLE */
+  .battle-badge-pill {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: rgba(255,159,67,0.12);
+    color: var(--orange);
+    border: 1px solid var(--orange);
+    text-align: center;
+  }
+
+/* Barre de progression battle */
+  .battle-progress-bar-wrap {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+  }
+
+.battle-progress-bar {
+    height: 100%;
+    background: var(--orange);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+
+/* Timer global battle */
+  .battle-global-timer {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--orange);
+    text-align: center;
+  }
+
+.battle-global-timer.urgent { color: var(--red); }
+
+/* Ranking battle (côté student) */
+  .ranking-table { display: flex; flex-direction: column; gap: 6px; }
+
+.ranking-me { background: rgba(124,106,255,0.08) !important; border-color: var(--accent) !important; }
