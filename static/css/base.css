@@ -1,0 +1,48 @@
+/* ===== base.css — socle commun (variables, fonts, reset, composants partagés) ===== */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+    --bg: #0f0f13;
+    --surface: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #7c6aff;
+    --accent-dim: #3d3475;
+    --green: #22d98a;
+    --red: #ff5c5c;
+    --orange: #ff9f43;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+.btn-primary { background: var(--accent); color: #fff; }
+
+.btn-primary:hover { opacity: 0.88; }
+
+.btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+
+.module-chip:hover { border-color: var(--accent); }
+
+.ranking-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; background: var(--bg); border-radius: 8px;
+    font-size: 0.88rem; border: 1px solid var(--border);
+  }
+
+.ranking-row.gold   { border-color: #ffd700; background: rgba(255,215,0,0.06); }
+
+.ranking-row.silver { border-color: #c0c0c0; background: rgba(192,192,192,0.06); }
+
+.ranking-row.bronze { border-color: #cd7f32; background: rgba(205,127,50,0.06); }
+
+.ranking-pos { font-family: var(--mono); font-size: 1.1rem; width: 32px; }
+
+.ranking-name { flex: 1; margin: 0 10px; font-weight: 600; }
+
+.ranking-score { font-family: var(--mono); color: var(--green); }
+
+.ranking-time { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); margin-left: 8px; }
