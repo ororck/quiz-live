@@ -96,10 +96,30 @@
       <button class="rev-allbtn" onclick="revSelectAllThemes()">Tout réviser</button>
     </div>
 
+    <label>Mode d'étude</label>
+    <div id="rev-mode-row" class="rev-mode-row">
+      <div class="rev-mode rev-mode-sel" data-mode="notion" onclick="revSelectMode('notion')">
+        <span class="rev-mode-ic rev-ic-notion">◆</span>
+        <span class="rev-mode-t">Notions</span>
+        <span class="rev-mode-s">Se tester sur les définitions</span>
+      </div>
+      <div class="rev-mode" data-mode="scenario" onclick="revSelectMode('scenario')">
+        <span class="rev-mode-ic rev-ic-scenario">▲</span>
+        <span class="rev-mode-t">Scénarios</span>
+        <span class="rev-mode-s">Se tester en mise en situation</span>
+      </div>
+      <div class="rev-mode" data-mode="fiche" onclick="revSelectMode('fiche')">
+        <span class="rev-mode-ic rev-ic-fiche">▤</span>
+        <span class="rev-mode-t">Fiche</span>
+        <span class="rev-mode-s">Lire la synthèse du thème</span>
+      </div>
+    </div>
+
     <label>Domaine</label>
     <div id="rev-domain-row" class="rev-dom-row"></div>
     <div id="rev-theme-panel" class="rev-theme-panel"></div>
 
+    <div id="rev-pool-wrap">
     <label>À réviser</label>
     <div id="rev-pool-row" style="display:flex;gap:8px;flex-wrap:wrap;">
       <div class="type-btn selected-type" onclick="revSelectPool('all', this)">Tout</div>
@@ -108,11 +128,22 @@
       <div class="type-btn" onclick="revSelectPool('medium', this)">Moyen</div>
       <div class="type-btn" onclick="revSelectPool('acquired', this)">Acquis</div>
     </div>
+    </div>
 
     <div id="revision-setup-error" style="display:none;color:var(--red);font-size:0.85rem;"></div>
     <button class="btn btn-primary" id="rev-start-btn" onclick="startRevision()">Choisis un thème</button>
     <button class="btn btn-ghost" onclick="revisionLogout()">Changer de pseudo</button>
   </div>
+</div>
+
+<!-- SCREEN : REVISION - fiche (lecture seule) -->
+<div class="screen" id="screen-revision-fiche">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="rev-topbar">
+    <button class="rev-quit" onclick="showScreen('screen-revision-setup')">← Quitter</button>
+    <span id="rev-fiche-count" class="rev-progress"></span>
+  </div>
+  <div id="rev-fiche-slot" class="rev-fiche"></div>
 </div>
 
 <!-- SCREEN : REVISION - carte -->
