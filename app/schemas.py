@@ -136,6 +136,7 @@ class FlashcardCreate(BaseModel):
     back: str
     analogy: str | None = None
     category: str
+    theme: str | None = None
     card_type: str = "notion"  # notion | scenario
 
 
@@ -145,6 +146,7 @@ class FlashcardOut(BaseModel):
     back: str
     analogy: str | None
     category: str
+    theme: str | None
     card_type: str  # notion | scenario
 
     model_config = {"from_attributes": True}
