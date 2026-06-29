@@ -7,6 +7,7 @@ import os
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request, Header
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -600,5 +601,91 @@ async def websocket_endpoint(websocket: WebSocket, session_code: str):
 # ---------------------------------------------------------------------------
 # Fichiers statiques (front) - monté en dernier
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Routes : Flashcards (revision, DB persistante, self-paced)
+# Securite : pseudo et status valides par schema (allowlist), ORM parametre
+# (pas d'injection SQL), ecritures rate-limitees. Pas de mot de passe :
+# modele de confiance assume (promo d'environ 12 personnes).
+# ---------------------------------------------------------------------------
+
+@app.post("/flashcards", response_model=schemas.FlashcardOut)
+def create_flashcard(
+    payload: schemas.FlashcardCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key),  # meme protection que la banque de questions
+):
+    card = models.Flashcard(**payload.model_dump())
+    db.add(card); db.commit(); db.refresh(card)
+    return card
+
+
+@app.get("/flashcards", response_model=list[schemas.FlashcardOut])
+def list_flashcards(category: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(models.Flashcard)
+    if category:
+        query = query.filter(models.Flashcard.category == category)
+    return query.all()
+
+
+@app.post("/study/users", response_model=schemas.StudyUserOut)
+@limiter.limit("10/minute")
+def create_study_user(request: Request, payload: schemas.StudyUserCreate, db: Session = Depends(get_db)):
+    pseudo = payload.pseudo.strip().lower()  # normalisation : "Bob" et "bob" = meme user
+    user = models.StudyUser(pseudo=pseudo)
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()  # la contrainte UNIQUE a refuse le doublon
+        raise HTTPException(409, "Ce pseudo existe deja, choisis-en un autre ou connecte-toi")
+    db.refresh(user)
+    return user
+
+
+@app.get("/study/users/{pseudo}", response_model=schemas.StudyUserOut)
+@limiter.limit("20/minute")
+def get_study_user(request: Request, pseudo: str, db: Session = Depends(get_db)):
+    user = db.query(models.StudyUser).filter(models.StudyUser.pseudo == pseudo.strip().lower()).first()
+    if not user:
+        raise HTTPException(404, "Pseudo introuvable")
+    return user
+
+
+@app.post("/study/users/{pseudo}/progress", response_model=schemas.ProgressOut)
+@limiter.limit("60/minute")
+def set_progress(request: Request, pseudo: str, payload: schemas.ProgressUpsert, db: Session = Depends(get_db)):
+    user = db.query(models.StudyUser).filter(models.StudyUser.pseudo == pseudo.strip().lower()).first()
+    if not user:
+        raise HTTPException(404, "Pseudo introuvable")
+    card = db.query(models.Flashcard).filter(models.Flashcard.id == payload.flashcard_id).first()
+    if not card:
+        raise HTTPException(404, "Carte introuvable")
+
+    # Upsert : couple (user, carte) unique -> on recupere la ligne, sinon on la cree
+    row = (
+        db.query(models.UserProgress)
+        .filter(
+            models.UserProgress.user_id == user.id,
+            models.UserProgress.flashcard_id == payload.flashcard_id,
+        )
+        .first()
+    )
+    if row:
+        row.status = payload.status  # on ecrase le tag precedent
+    else:
+        row = models.UserProgress(user_id=user.id, flashcard_id=payload.flashcard_id, status=payload.status)
+        db.add(row)
+    db.commit(); db.refresh(row)
+    return row
+
+
+@app.get("/study/users/{pseudo}/progress", response_model=list[schemas.ProgressOut])
+def get_progress(pseudo: str, db: Session = Depends(get_db)):
+    user = db.query(models.StudyUser).filter(models.StudyUser.pseudo == pseudo.strip().lower()).first()
+    if not user:
+        raise HTTPException(404, "Pseudo introuvable")
+    return db.query(models.UserProgress).filter(models.UserProgress.user_id == user.id).all()
+
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
