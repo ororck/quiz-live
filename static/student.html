@@ -84,24 +84,21 @@
   </div>
 </div>
 
-<!-- SCREEN : REVISION - choix module + pool -->
+<!-- SCREEN : REVISION - choix domaine/themes + pool -->
 <div class="screen" id="screen-revision-setup">
   <div class="logo">QUIZ_LIVE</div>
   <div class="card" style="gap:16px;display:flex;flex-direction:column;">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <h2 style="margin:0;">Réviser</h2>
-      <span style="font-size:0.8rem;color:var(--muted);">Connecté : <b id="revision-current-pseudo" style="color:var(--accent);"></b></span>
+    <div class="rev-setup-top">
+      <div>
+        <h2 style="margin:0;">Réviser</h2>
+        <span style="font-size:0.8rem;color:var(--muted);">Connecté : <b id="revision-current-pseudo" style="color:var(--accent);"></b></span>
+      </div>
+      <button class="rev-allbtn" onclick="revSelectAllThemes()">Tout réviser</button>
     </div>
 
-    <label>Module</label>
-    <div id="rev-module-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <div class="module-chip selected-chip" onclick="revSelectCategory('az-900-module-1', this)"><span>Module 1</span><small>Cloud Concepts</small></div>
-      <div class="module-chip" onclick="revSelectCategory('az-900-module-2', this)"><span>Module 2</span><small>Architecture &amp; Compute</small></div>
-      <div class="module-chip" onclick="revSelectCategory('az-900-module-3', this)"><span>Module 3</span><small>Networking</small></div>
-      <div class="module-chip" onclick="revSelectCategory('az-900-module-4', this)"><span>Module 4</span><small>Storage</small></div>
-      <div class="module-chip" onclick="revSelectCategory('az-900-module-5', this)"><span>Module 5</span><small>Identity &amp; Security</small></div>
-      <div class="module-chip" onclick="revSelectCategory('az-900-module-6', this)"><span>Module 6</span><small>Governance &amp; Monitoring</small></div>
-    </div>
+    <label>Domaine</label>
+    <div id="rev-domain-row" class="rev-dom-row"></div>
+    <div id="rev-theme-panel" class="rev-theme-panel"></div>
 
     <label>À réviser</label>
     <div id="rev-pool-row" style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -113,7 +110,7 @@
     </div>
 
     <div id="revision-setup-error" style="display:none;color:var(--red);font-size:0.85rem;"></div>
-    <button class="btn btn-primary" onclick="startRevision()">Commencer →</button>
+    <button class="btn btn-primary" id="rev-start-btn" onclick="startRevision()">Choisis un thème</button>
     <button class="btn btn-ghost" onclick="revisionLogout()">Changer de pseudo</button>
   </div>
 </div>

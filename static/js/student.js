@@ -1011,7 +1011,6 @@ let revisionPseudo = null;
 let revCards = [];      // cartes du pool courant
 let revIndex = 0;       // index de la carte affichee
 let revProgress = {};   // map flashcard_id -> status
-let revCategory = 'az-900-module-1';
 let revPool = 'all';
 
 // --- affichage des erreurs inline (remplace les alert) ---
@@ -1072,6 +1071,7 @@ function onPseudoReady(pseudo) {
   localStorage.setItem(REVISION_PSEUDO_KEY, pseudo);
   document.getElementById('revision-current-pseudo').textContent = pseudo;
   showScreen('screen-revision-setup');
+  loadRevisionSetup();
 }
 
 function revisionLogout() {
@@ -1079,17 +1079,152 @@ function revisionLogout() {
   showRevisionLogin();
 }
 
-// --- ecran setup : module + pool ---
-function revSelectCategory(cat, el) {
-  revCategory = cat;
-  document.querySelectorAll('#rev-module-grid .module-chip').forEach(c => c.classList.remove('selected-chip'));
-  el.classList.add('selected-chip');
+// --- ecran setup : domaines -> themes (multi) -> pool ---
+const REV_DOMAIN_ORDER = ['concepts', 'architecture', 'governance'];
+const REV_DOMAIN_META = {
+  concepts:     { label: 'Concepts',     color: 'var(--dom-concepts)',     weight: '25-30%' },
+  architecture: { label: 'Architecture', color: 'var(--dom-architecture)', weight: '35-40%' },
+  governance:   { label: 'Governance',   color: 'var(--dom-governance)',   weight: '30-35%' },
+};
+const REV_THEME_LABEL = {
+  'cloud-computing': 'Cloud computing', 'cloud-benefits': 'Benefits of cloud services', 'service-types': 'Cloud service types',
+  'core-components': 'Core architectural components', 'compute-networking': 'Compute and networking', 'storage': 'Storage services', 'identity-security': 'Identity, access, and security',
+  'cost-management': 'Cost management', 'governance-compliance': 'Governance and compliance', 'resource-management': 'Managing and deploying resources', 'monitoring': 'Monitoring tools',
+};
+const REV_THEME_ORDER = {
+  concepts: ['cloud-computing', 'cloud-benefits', 'service-types'],
+  architecture: ['core-components', 'compute-networking', 'storage', 'identity-security'],
+  governance: ['cost-management', 'governance-compliance', 'resource-management', 'monitoring'],
+};
+
+let revAllCards = [];               // toutes les flashcards (chargees une fois)
+let revSelectedThemes = new Set();  // themes coches pour la session
+let revOpenDomain = null;           // domaine deplie
+
+// charge cartes + progression, puis construit l'ecran setup
+async function loadRevisionSetup() {
+  const e = document.getElementById('revision-setup-error');
+  clearError(e);
+  const cardsRes = await fetch(`${API}/flashcards`);
+  if (!cardsRes.ok) { showError(e, 'Impossible de charger les cartes.'); return; }
+  revAllCards = await cardsRes.json();
+
+  const progRes = await fetch(`${API}/study/users/${encodeURIComponent(revisionPseudo)}/progress`);
+  revProgress = {};
+  if (progRes.ok) { (await progRes.json()).forEach(p => { revProgress[p.flashcard_id] = p.status; }); }
+
+  revSelectedThemes = new Set();
+  revOpenDomain = null;
+  renderDomainDecks();
+  renderThemePanel();
+  updateStartButton();
+}
+
+// {total, seen} pour un sous-ensemble de cartes ("vue" = deja taggee)
+function revStats(cards) {
+  let seen = 0;
+  for (const c of cards) if (c.id in revProgress) seen++;
+  return { total: cards.length, seen };
+}
+
+function renderDomainDecks() {
+  const row = document.getElementById('rev-domain-row');
+  row.innerHTML = '';
+  for (const key of REV_DOMAIN_ORDER) {
+    const meta = REV_DOMAIN_META[key];
+    const cards = revAllCards.filter(c => c.category === key);
+    const { total, seen } = revStats(cards);
+    const pct = total ? Math.round(100 * seen / total) : 0;
+    const open = revOpenDomain === key;
+    const el = document.createElement('div');
+    el.className = 'rev-dom' + (open ? ' open' : '');
+    el.innerHTML =
+      '<div class="rev-dom-stk2"></div><div class="rev-dom-stk1"></div>' +
+      '<div class="rev-dom-face"' + (open ? ` style="border-color:${meta.color}"` : '') + '>' +
+        `<div class="rev-dom-tab" style="background:${meta.color}"></div>` +
+        `<div class="rev-dom-name">${meta.label}</div>` +
+        `<div class="rev-dom-meta">${total} cartes - ${meta.weight}</div>` +
+        `<div class="rev-dom-track"><span class="rev-dom-fill" style="width:${pct}%;background:${meta.color}"></span></div>` +
+        `<div class="rev-dom-foot"><span class="rev-dom-prog">${seen} / ${total} vues</span><span class="rev-dom-chev">\u2304</span></div>` +
+      '</div>';
+    el.addEventListener('click', () => toggleDomain(key));
+    row.appendChild(el);
+  }
+}
+
+function toggleDomain(key) {
+  revOpenDomain = (revOpenDomain === key) ? null : key;
+  renderDomainDecks();
+  renderThemePanel();
+}
+
+function renderThemePanel() {
+  const panel = document.getElementById('rev-theme-panel');
+  panel.innerHTML = '';
+  if (!revOpenDomain) return;
+  const meta = REV_DOMAIN_META[revOpenDomain];
+  const wrap = document.createElement('div');
+  wrap.className = 'rev-panel';
+  let html = `<div class="rev-panel-h"><span class="rev-panel-dot" style="background:${meta.color}"></span>${meta.label} - choisis un ou plusieurs themes</div><div class="rev-tgrid">`;
+  for (const slug of REV_THEME_ORDER[revOpenDomain]) {
+    const cards = revAllCards.filter(c => c.theme === slug);
+    const { total, seen } = revStats(cards);
+    const pct = total ? Math.round(100 * seen / total) : 0;
+    const sel = revSelectedThemes.has(slug);
+    html +=
+      `<div class="rev-tdeck${sel ? ' sel' : ''}" data-slug="${slug}">` +
+        '<div class="rev-tdeck-stk"></div>' +
+        '<div class="rev-tdeck-face"' + (sel ? ` style="border-color:${meta.color}"` : '') + '>' +
+          `<span class="rev-tdeck-check" style="color:${meta.color}">\u2713</span>` +
+          `<div class="rev-tdeck-tab" style="background:${meta.color}"></div>` +
+          `<div class="rev-tdeck-name">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</div>` +
+          `<div class="rev-tdeck-meta"><span>${total} cartes</span><span>${seen}/${total}</span></div>` +
+          `<div class="rev-tdeck-track"><span class="rev-tdeck-fill" style="width:${pct}%;background:${meta.color}"></span></div>` +
+        '</div>' +
+      '</div>';
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+  panel.appendChild(wrap);
+  wrap.querySelectorAll('.rev-tdeck').forEach(node => {
+    node.addEventListener('click', () => toggleTheme(node.dataset.slug));
+  });
+}
+
+function toggleTheme(slug) {
+  if (revSelectedThemes.has(slug)) revSelectedThemes.delete(slug);
+  else revSelectedThemes.add(slug);
+  renderThemePanel();
+  updateStartButton();
+}
+
+// bouton "Tout reviser" : tout cocher / tout decocher
+function revSelectAllThemes() {
+  const all = Object.values(REV_THEME_ORDER).flat();
+  const everySelected = all.every(s => revSelectedThemes.has(s));
+  revSelectedThemes = everySelected ? new Set() : new Set(all);
+  renderThemePanel();
+  updateStartButton();
 }
 
 function revSelectPool(pool, el) {
   revPool = pool;
   document.querySelectorAll('#rev-pool-row .type-btn').forEach(b => b.classList.remove('selected-type'));
   el.classList.add('selected-type');
+  updateStartButton();
+}
+
+function revSelectedCards() {
+  return revAllCards.filter(c => revSelectedThemes.has(c.theme));
+}
+
+function updateStartButton() {
+  const btn = document.getElementById('rev-start-btn');
+  if (!btn) return;
+  if (revSelectedThemes.size === 0) { btn.textContent = 'Choisis un theme'; return; }
+  const n = filterByPool(revSelectedCards(), revPool).length;
+  const t = revSelectedThemes.size;
+  btn.textContent = `Commencer - ${n} carte${n > 1 ? 's' : ''} - ${t} theme${t > 1 ? 's' : ''}`;
 }
 
 function shuffleRev(arr) {
@@ -1108,23 +1243,9 @@ function filterByPool(cards, pool) {
 async function startRevision() {
   const e = document.getElementById('revision-setup-error');
   clearError(e);
-
-  // 1) cartes de la categorie
-  const cardsRes = await fetch(`${API}/flashcards?category=${encodeURIComponent(revCategory)}`);
-  if (!cardsRes.ok) { showError(e, 'Impossible de charger les cartes.'); return; }
-  const allCards = await cardsRes.json();
-
-  // 2) progression de l'utilisateur
-  const progRes = await fetch(`${API}/study/users/${encodeURIComponent(revisionPseudo)}/progress`);
-  revProgress = {};
-  if (progRes.ok) {
-    (await progRes.json()).forEach(p => { revProgress[p.flashcard_id] = p.status; });
-  }
-
-  // 3) filtrage par pool
-  revCards = filterByPool(allCards, revPool);
+  if (revSelectedThemes.size === 0) { showError(e, 'Choisis au moins un theme.'); return; }
+  revCards = filterByPool(revSelectedCards(), revPool);
   if (revCards.length === 0) { showError(e, 'Aucune carte dans ce pool. Choisis-en un autre.'); return; }
-
   shuffleRev(revCards);
   revIndex = 0;
   renderRevCard();
