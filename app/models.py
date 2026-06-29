@@ -34,6 +34,7 @@ class Flashcard(Base):
     back: Mapped[str]                                        # verso : la réponse
     analogy: Mapped[str | None] = mapped_column(default=None)  # analogie optionnelle
     category: Mapped[str] = mapped_column(index=True)        # ex: "az-900-module-1"
+    theme: Mapped[str | None] = mapped_column(default=None, index=True)  # sous-categorie : slug du theme officiel
     card_type: Mapped[str] = mapped_column(default="notion")   # "notion" | "scenario"
 
 
