@@ -33,7 +33,7 @@ ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
 
 # Nom du header d'authent admin : doit etre le MEME que pour POST /bank/questions
 # (regle-le ici si seed_db.py utilise un autre nom).
-ADMIN_HEADER = "X-Admin-Key"
+ADMIN_HEADER = "X-Api-Key"
 
 
 # =============================================================================
