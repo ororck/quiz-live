@@ -38,6 +38,13 @@
         <p>Crée une battle, partage le code, affrontez-vous</p>
       </div>
     </div>
+    <div class="mode-card" onclick="showRevisionLogin()">
+      <div class="mode-icon">🃏</div>
+      <div class="mode-info">
+        <h3>Révision</h3>
+        <p>Révise tes notions en flashcards, à ton rythme</p>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -57,6 +64,80 @@
     </div>
     <button class="btn btn-primary" onclick="joinSession()">Rejoindre →</button>
     <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
+  </div>
+</div>
+
+<!-- SCREEN : REVISION - connexion par pseudo -->
+<div class="screen" id="screen-revision-login">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <h2>Révision</h2>
+    <p>Entre ton pseudo pour retrouver ta progression, ou crée-en un nouveau.</p>
+    <div class="field">
+      <label>Ton pseudo</label>
+      <input type="text" id="revision-pseudo-input" placeholder="mohamed30" maxlength="30" autocomplete="off">
+    </div>
+    <div id="revision-login-error" style="display:none;color:var(--red);font-size:0.85rem;"></div>
+    <button class="btn btn-primary" onclick="enterPseudo()">Entrer →</button>
+    <button class="btn btn-confirm" onclick="createPseudo()">Créer un nouveau pseudo</button>
+    <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
+  </div>
+</div>
+
+<!-- SCREEN : REVISION - choix module + pool -->
+<div class="screen" id="screen-revision-setup">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="margin:0;">Réviser</h2>
+      <span style="font-size:0.8rem;color:var(--muted);">Connecté : <b id="revision-current-pseudo" style="color:var(--accent);"></b></span>
+    </div>
+
+    <label>Module</label>
+    <div id="rev-module-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="module-chip selected-chip" onclick="revSelectCategory('az-900-module-1', this)"><span>Module 1</span><small>Cloud Concepts</small></div>
+      <div class="module-chip" onclick="revSelectCategory('az-900-module-2', this)"><span>Module 2</span><small>Architecture &amp; Compute</small></div>
+      <div class="module-chip" onclick="revSelectCategory('az-900-module-3', this)"><span>Module 3</span><small>Networking</small></div>
+      <div class="module-chip" onclick="revSelectCategory('az-900-module-4', this)"><span>Module 4</span><small>Storage</small></div>
+      <div class="module-chip" onclick="revSelectCategory('az-900-module-5', this)"><span>Module 5</span><small>Identity &amp; Security</small></div>
+      <div class="module-chip" onclick="revSelectCategory('az-900-module-6', this)"><span>Module 6</span><small>Governance &amp; Monitoring</small></div>
+    </div>
+
+    <label>À réviser</label>
+    <div id="rev-pool-row" style="display:flex;gap:8px;flex-wrap:wrap;">
+      <div class="type-btn selected-type" onclick="revSelectPool('all', this)">Tout</div>
+      <div class="type-btn" onclick="revSelectPool('new', this)">Jamais vues</div>
+      <div class="type-btn" onclick="revSelectPool('to_review', this)">À revoir</div>
+      <div class="type-btn" onclick="revSelectPool('medium', this)">Moyen</div>
+      <div class="type-btn" onclick="revSelectPool('acquired', this)">Acquis</div>
+    </div>
+
+    <div id="revision-setup-error" style="display:none;color:var(--red);font-size:0.85rem;"></div>
+    <button class="btn btn-primary" onclick="startRevision()">Commencer →</button>
+    <button class="btn btn-ghost" onclick="revisionLogout()">Changer de pseudo</button>
+  </div>
+</div>
+
+<!-- SCREEN : REVISION - carte -->
+<div class="screen" id="screen-revision-card">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="rev-topbar">
+    <button class="rev-quit" onclick="showScreen('screen-revision-setup')">← Quitter</button>
+    <span id="rev-progress" class="rev-progress">0 / 0</span>
+  </div>
+  <div id="rev-card-slot"></div>
+  <button class="btn btn-ghost" onclick="revSkip()">Passer sans tagger</button>
+</div>
+
+<!-- SCREEN : REVISION - termine -->
+<div class="screen" id="screen-revision-done">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="text-align:center;display:flex;flex-direction:column;gap:16px;">
+    <div style="font-size:3rem;">✅</div>
+    <h2 style="margin:0;">Pool terminé !</h2>
+    <p>Ta progression est enregistrée sous ton pseudo.</p>
+    <button class="btn btn-primary" onclick="showScreen('screen-revision-setup')">Choisir un autre pool →</button>
+    <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour à l'accueil</button>
   </div>
 </div>
 

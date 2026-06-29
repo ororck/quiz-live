@@ -1000,3 +1000,201 @@ function renderText(text) {
     .replace(/\n/g, '<br>');
 }
 
+
+
+// ================= REVISION : flashcards =================
+
+const REVISION_PSEUDO_KEY = 'revision_pseudo';
+const PSEUDO_RE = /^[A-Za-z0-9_-]{2,30}$/;   // miroir de l'allowlist backend
+let revisionPseudo = null;
+
+let revCards = [];      // cartes du pool courant
+let revIndex = 0;       // index de la carte affichee
+let revProgress = {};   // map flashcard_id -> status
+let revCategory = 'az-900-module-1';
+let revPool = 'all';
+
+// --- affichage des erreurs inline (remplace les alert) ---
+function showError(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+function clearError(el) { el.textContent = ''; el.style.display = 'none'; el.style.color = 'var(--red)'; }
+
+// Lit le message renvoye par l'API. FastAPI met le texte dans "detail".
+// Erreur de validation (422) -> "detail" est une liste -> message lisible.
+async function readApiError(res, fallback) {
+  try {
+    const data = await res.json();
+    if (Array.isArray(data.detail)) {
+      return 'Pseudo invalide : 2 a 30 caracteres, lettres, chiffres, - ou _ seulement.';
+    }
+    return data.detail || fallback;
+  } catch { return fallback; }
+}
+
+// --- ecran login ---
+function showRevisionLogin() {
+  const e = document.getElementById('revision-login-error');
+  clearError(e);
+  const saved = localStorage.getItem(REVISION_PSEUDO_KEY);
+  if (saved) document.getElementById('revision-pseudo-input').value = saved;
+  showScreen('screen-revision-login');
+}
+
+async function createPseudo() {
+  const e = document.getElementById('revision-login-error');
+  clearError(e);
+  const pseudo = document.getElementById('revision-pseudo-input').value.trim();
+  if (!PSEUDO_RE.test(pseudo)) {
+    showError(e, 'Pseudo invalide : 2 a 30 caracteres, lettres, chiffres, - ou _ seulement.');
+    return;
+  }
+  const res = await fetch(`${API}/study/users`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pseudo })
+  });
+  if (!res.ok) { showError(e, await readApiError(res, 'Creation impossible.')); return; }
+  const data = await res.json();
+  onPseudoReady(data.pseudo);
+}
+
+async function enterPseudo() {
+  const e = document.getElementById('revision-login-error');
+  clearError(e);
+  const pseudo = document.getElementById('revision-pseudo-input').value.trim();
+  if (!PSEUDO_RE.test(pseudo)) { showError(e, 'Pseudo invalide.'); return; }
+  const res = await fetch(`${API}/study/users/${encodeURIComponent(pseudo)}`);
+  if (!res.ok) { showError(e, await readApiError(res, 'Pseudo introuvable.')); return; }
+  const data = await res.json();
+  onPseudoReady(data.pseudo);
+}
+
+function onPseudoReady(pseudo) {
+  revisionPseudo = pseudo;
+  localStorage.setItem(REVISION_PSEUDO_KEY, pseudo);
+  document.getElementById('revision-current-pseudo').textContent = pseudo;
+  showScreen('screen-revision-setup');
+}
+
+function revisionLogout() {
+  revisionPseudo = null;
+  showRevisionLogin();
+}
+
+// --- ecran setup : module + pool ---
+function revSelectCategory(cat, el) {
+  revCategory = cat;
+  document.querySelectorAll('#rev-module-grid .module-chip').forEach(c => c.classList.remove('selected-chip'));
+  el.classList.add('selected-chip');
+}
+
+function revSelectPool(pool, el) {
+  revPool = pool;
+  document.querySelectorAll('#rev-pool-row .type-btn').forEach(b => b.classList.remove('selected-type'));
+  el.classList.add('selected-type');
+}
+
+function shuffleRev(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function filterByPool(cards, pool) {
+  if (pool === 'all') return cards.slice();
+  if (pool === 'new') return cards.filter(c => !(c.id in revProgress));
+  return cards.filter(c => revProgress[c.id] === pool);  // to_review | medium | acquired
+}
+
+async function startRevision() {
+  const e = document.getElementById('revision-setup-error');
+  clearError(e);
+
+  // 1) cartes de la categorie
+  const cardsRes = await fetch(`${API}/flashcards?category=${encodeURIComponent(revCategory)}`);
+  if (!cardsRes.ok) { showError(e, 'Impossible de charger les cartes.'); return; }
+  const allCards = await cardsRes.json();
+
+  // 2) progression de l'utilisateur
+  const progRes = await fetch(`${API}/study/users/${encodeURIComponent(revisionPseudo)}/progress`);
+  revProgress = {};
+  if (progRes.ok) {
+    (await progRes.json()).forEach(p => { revProgress[p.flashcard_id] = p.status; });
+  }
+
+  // 3) filtrage par pool
+  revCards = filterByPool(allCards, revPool);
+  if (revCards.length === 0) { showError(e, 'Aucune carte dans ce pool. Choisis-en un autre.'); return; }
+
+  shuffleRev(revCards);
+  revIndex = 0;
+  renderRevCard();
+  showScreen('screen-revision-card');
+}
+
+// --- rendu d'une carte ---
+function tagLabel(s) { return s === 'to_review' ? 'A revoir' : s === 'medium' ? 'Moyen' : 'Acquis'; }
+
+function renderRevCard() {
+  const card = revCards[revIndex];
+  const isNotion = card.card_type !== 'scenario';
+  const typeLabel = isNotion ? 'Notion' : 'Mise en situation';
+  const cls = isNotion ? 'rev-notion' : 'rev-scenario';
+
+  document.getElementById('rev-progress').textContent = `${revIndex + 1} / ${revCards.length}`;
+
+  const analogyHtml = card.analogy
+    ? `<div class="rev-analogy">${escapeHtml(card.analogy)}</div>` : '';
+  const currentTag = revProgress[card.id]
+    ? `<div class="rev-current-tag">Tag actuel : ${tagLabel(revProgress[card.id])}</div>` : '';
+
+  document.getElementById('rev-card-slot').innerHTML = `
+    <div class="rev-flip ${cls}" id="rev-flip" onclick="flipRevCard()">
+      <div class="rev-flip-inner">
+        <div class="rev-side rev-front">
+          <span class="rev-chip">${typeLabel}</span>
+          <span class="rev-concept">${escapeHtml(card.front)}</span>
+          <span class="rev-tap">toucher pour retourner</span>
+          ${currentTag}
+        </div>
+        <div class="rev-side rev-back">
+          <span class="rev-ans-label">Reponse</span>
+          <span class="rev-ans">${escapeHtml(card.back)}</span>
+          ${analogyHtml}
+          <div class="rev-tags">
+            <button class="rev-tag rev-tag-red" onclick="tagCard(event,'to_review')">A revoir</button>
+            <button class="rev-tag rev-tag-orange" onclick="tagCard(event,'medium')">Moyen</button>
+            <button class="rev-tag rev-tag-green" onclick="tagCard(event,'acquired')">Acquis</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function flipRevCard() {
+  document.getElementById('rev-flip').classList.toggle('flipped');
+}
+
+async function tagCard(ev, status) {
+  ev.stopPropagation();  // ne pas declencher le flip de la carte
+  const card = revCards[revIndex];
+  const prev = revProgress[card.id];
+  revProgress[card.id] = status;   // mise a jour optimiste
+
+  const res = await fetch(`${API}/study/users/${encodeURIComponent(revisionPseudo)}/progress`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ flashcard_id: card.id, status })
+  });
+  if (!res.ok) {
+    // echec : on annule la mise a jour locale
+    if (prev === undefined) delete revProgress[card.id]; else revProgress[card.id] = prev;
+    console.error('Echec enregistrement du tag');
+  }
+  nextRevCard();
+}
+
+function revSkip() { nextRevCard(); }
+
+function nextRevCard() {
+  if (revIndex < revCards.length - 1) { revIndex++; renderRevCard(); }
+  else { showScreen('screen-revision-done'); }
+}
