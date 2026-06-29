@@ -1100,6 +1100,7 @@ const REV_THEME_ORDER = {
 let revAllCards = [];               // toutes les flashcards (chargees une fois)
 let revSelectedThemes = new Set();  // themes coches pour la session
 let revOpenDomain = null;           // domaine deplie
+let revMode = 'notion';             // notion | scenario | fiche
 
 // charge cartes + progression, puis construit l'ecran setup
 async function loadRevisionSetup() {
@@ -1115,6 +1116,9 @@ async function loadRevisionSetup() {
 
   revSelectedThemes = new Set();
   revOpenDomain = null;
+  revMode = 'notion';
+  document.querySelectorAll('#rev-mode-row .rev-mode').forEach(el => el.classList.toggle('rev-mode-sel', el.dataset.mode === 'notion'));
+  document.getElementById('rev-pool-wrap').classList.remove('rev-pool-off');
   renderDomainDecks();
   renderThemePanel();
   updateStartButton();
@@ -1127,12 +1131,19 @@ function revStats(cards) {
   return { total: cards.length, seen };
 }
 
+// le mode filtre le type de carte : notion/fiche -> notion, scenario -> scenario
+function cardTypeForMode() { return revMode === 'scenario' ? 'scenario' : 'notion'; }
+function cardsForMode(cards) {
+  const t = cardTypeForMode();
+  return cards.filter(c => (c.card_type || 'notion') === t);
+}
+
 function renderDomainDecks() {
   const row = document.getElementById('rev-domain-row');
   row.innerHTML = '';
   for (const key of REV_DOMAIN_ORDER) {
     const meta = REV_DOMAIN_META[key];
-    const cards = revAllCards.filter(c => c.category === key);
+    const cards = cardsForMode(revAllCards.filter(c => c.category === key));
     const { total, seen } = revStats(cards);
     const pct = total ? Math.round(100 * seen / total) : 0;
     const open = revOpenDomain === key;
@@ -1167,7 +1178,7 @@ function renderThemePanel() {
   wrap.className = 'rev-panel';
   let html = `<div class="rev-panel-h"><span class="rev-panel-dot" style="background:${meta.color}"></span>${meta.label} - choisis un ou plusieurs themes</div><div class="rev-tgrid">`;
   for (const slug of REV_THEME_ORDER[revOpenDomain]) {
-    const cards = revAllCards.filter(c => c.theme === slug);
+    const cards = cardsForMode(revAllCards.filter(c => c.theme === slug));
     const { total, seen } = revStats(cards);
     const pct = total ? Math.round(100 * seen / total) : 0;
     const sel = revSelectedThemes.has(slug);
@@ -1215,15 +1226,20 @@ function revSelectPool(pool, el) {
 }
 
 function revSelectedCards() {
-  return revAllCards.filter(c => revSelectedThemes.has(c.theme));
+  return cardsForMode(revAllCards.filter(c => revSelectedThemes.has(c.theme)));
 }
 
 function updateStartButton() {
   const btn = document.getElementById('rev-start-btn');
   if (!btn) return;
-  if (revSelectedThemes.size === 0) { btn.textContent = 'Choisis un theme'; return; }
-  const n = filterByPool(revSelectedCards(), revPool).length;
   const t = revSelectedThemes.size;
+  if (t === 0) { btn.textContent = 'Choisis un theme'; return; }
+  if (revMode === 'fiche') {
+    const n = revSelectedCards().length;
+    btn.textContent = `Ouvrir la fiche - ${t} theme${t > 1 ? 's' : ''} (${n})`;
+    return;
+  }
+  const n = filterByPool(revSelectedCards(), revPool).length;
   btn.textContent = `Commencer - ${n} carte${n > 1 ? 's' : ''} - ${t} theme${t > 1 ? 's' : ''}`;
 }
 
@@ -1244,12 +1260,52 @@ async function startRevision() {
   const e = document.getElementById('revision-setup-error');
   clearError(e);
   if (revSelectedThemes.size === 0) { showError(e, 'Choisis au moins un theme.'); return; }
+  if (revMode === 'fiche') { return startFiche(e); }
   revCards = filterByPool(revSelectedCards(), revPool);
   if (revCards.length === 0) { showError(e, 'Aucune carte dans ce pool. Choisis-en un autre.'); return; }
   shuffleRev(revCards);
   revIndex = 0;
   renderRevCard();
   showScreen('screen-revision-card');
+}
+
+// choix du mode d'etude (notion | scenario | fiche)
+function revSelectMode(mode) {
+  revMode = mode;
+  document.querySelectorAll('#rev-mode-row .rev-mode').forEach(el => el.classList.toggle('rev-mode-sel', el.dataset.mode === mode));
+  document.getElementById('rev-pool-wrap').classList.toggle('rev-pool-off', mode === 'fiche');
+  renderDomainDecks();
+  renderThemePanel();
+  updateStartButton();
+}
+
+// --- fiche de revision : vue generee en lecture seule (agrege les notions des themes choisis) ---
+function startFiche(e) {
+  clearError(e);
+  const cards = revSelectedCards();  // notions des themes selectionnes
+  if (cards.length === 0) { showError(e, 'Aucune notion pour cette selection.'); return; }
+  renderFiche(cards);
+  showScreen('screen-revision-fiche');
+}
+
+function renderFiche(cards) {
+  const byTheme = {};
+  cards.forEach(c => { (byTheme[c.theme] = byTheme[c.theme] || []).push(c); });
+  const ordered = REV_DOMAIN_ORDER.flatMap(d => REV_THEME_ORDER[d]).filter(t => byTheme[t]);
+
+  let html = '';
+  ordered.forEach(slug => {
+    html += `<div class="fiche-theme"><h3 class="fiche-theme-h">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</h3>`;
+    byTheme[slug].forEach(c => {
+      const analogy = c.analogy ? `<div class="fiche-analogy">${escapeHtml(c.analogy)}</div>` : '';
+      html += `<div class="fiche-item"><div class="fiche-q">${escapeHtml(c.front)}</div><div class="fiche-a">${escapeHtml(c.back)}</div>${analogy}</div>`;
+    });
+    html += `</div>`;
+  });
+
+  document.getElementById('rev-fiche-slot').innerHTML = html;
+  document.getElementById('rev-fiche-count').textContent =
+    `${cards.length} notions - ${ordered.length} theme${ordered.length > 1 ? 's' : ''}`;
 }
 
 // --- rendu d'une carte ---
