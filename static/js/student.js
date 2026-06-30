@@ -1296,9 +1296,17 @@ function renderFiche(cards) {
   let html = '';
   ordered.forEach(slug => {
     html += `<div class="fiche-theme"><h3 class="fiche-theme-h">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</h3>`;
-    byTheme[slug].forEach(c => {
-      const analogy = c.analogy ? `<div class="fiche-analogy">${escapeHtml(c.analogy)}</div>` : '';
-      html += `<div class="fiche-item"><div class="fiche-q">${escapeHtml(c.front)}</div><div class="fiche-a">${escapeHtml(c.back)}</div>${analogy}</div>`;
+    byTheme[slug].forEach((c, i) => {
+      const num = String(i + 1).padStart(2, '0');
+      const analogy = c.analogy ? `<div class="fiche-an">${escapeHtml(c.analogy)}</div>` : '';
+      html += `<div class="fiche-row">` +
+                `<span class="fiche-num">${num}</span>` +
+                `<div class="fiche-body">` +
+                  `<div class="fiche-q">${escapeHtml(c.front)}</div>` +
+                  `<div class="fiche-a">${escapeHtml(c.back)}</div>` +
+                  analogy +
+                `</div>` +
+              `</div>`;
     });
     html += `</div>`;
   });
