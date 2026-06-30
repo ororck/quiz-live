@@ -1293,9 +1293,14 @@ function renderFiche(cards) {
   cards.forEach(c => { (byTheme[c.theme] = byTheme[c.theme] || []).push(c); });
   const ordered = REV_DOMAIN_ORDER.flatMap(d => REV_THEME_ORDER[d]).filter(t => byTheme[t]);
 
+  // theme -> domaine, pour recuperer la couleur (--dom-concepts / -architecture / -governance)
+  const themeDomain = {};
+  REV_DOMAIN_ORDER.forEach(d => REV_THEME_ORDER[d].forEach(t => { themeDomain[t] = d; }));
+
   let html = '';
   ordered.forEach(slug => {
-    html += `<div class="fiche-theme"><h3 class="fiche-theme-h">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</h3>`;
+    const color = REV_DOMAIN_META[themeDomain[slug]].color;  // ex: var(--dom-concepts)
+    html += `<div class="fiche-theme" style="--fiche-c:${color}"><h3 class="fiche-theme-h">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</h3>`;
     byTheme[slug].forEach((c, i) => {
       const num = String(i + 1).padStart(2, '0');
       const analogy = c.analogy ? `<div class="fiche-an">${escapeHtml(c.analogy)}</div>` : '';

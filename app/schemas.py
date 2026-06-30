@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 # --- Question Bank ---
@@ -125,3 +127,56 @@ class BattleResult(BaseModel):
     elapsed_seconds: float
     all_finished: bool
     ranking: list[BattleRankEntry] | None = None
+
+
+# --- Flashcards (révision, DB persistante) ---
+
+class FlashcardCreate(BaseModel):
+    front: str
+    back: str
+    analogy: str | None = None
+    category: str
+    theme: str | None = None
+    card_type: str = "notion"  # notion | scenario
+
+
+class FlashcardOut(BaseModel):
+    id: int
+    front: str
+    back: str
+    analogy: str | None
+    category: str
+    theme: str | None
+    card_type: str  # notion | scenario
+
+    model_config = {"from_attributes": True}
+
+
+# --- Study users (révision : pseudo sans mot de passe) ---
+# Allowlist stricte : longueur bornée + jeu de caractères sûr.
+# Coupe à la racine toute injection HTML/JS/SQL dans le pseudo.
+
+class StudyUserCreate(BaseModel):
+    pseudo: str = Field(min_length=2, max_length=30, pattern=r"^[A-Za-z0-9_-]+$")
+
+class StudyUserOut(BaseModel):
+    id: int
+    pseudo: str
+
+    model_config = {"from_attributes": True}
+
+
+# --- Progression / tags ---
+# Le status ne peut valoir que 3 choses : aucune donnée arbitraire en base.
+
+TagStatus = Literal["to_review", "medium", "acquired"]
+
+class ProgressUpsert(BaseModel):
+    flashcard_id: int
+    status: TagStatus
+
+class ProgressOut(BaseModel):
+    flashcard_id: int
+    status: TagStatus
+
+    model_config = {"from_attributes": True}
