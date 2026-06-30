@@ -1000,3 +1000,386 @@ function renderText(text) {
     .replace(/\n/g, '<br>');
 }
 
+
+
+// ================= REVISION : flashcards =================
+
+const REVISION_PSEUDO_KEY = 'revision_pseudo';
+const PSEUDO_RE = /^[A-Za-z0-9_-]{2,30}$/;   // miroir de l'allowlist backend
+let revisionPseudo = null;
+
+let revCards = [];      // cartes du pool courant
+let revIndex = 0;       // index de la carte affichee
+let revProgress = {};   // map flashcard_id -> status
+let revPool = 'all';
+
+// --- affichage des erreurs inline (remplace les alert) ---
+function showError(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+function clearError(el) { el.textContent = ''; el.style.display = 'none'; el.style.color = 'var(--red)'; }
+
+// Lit le message renvoye par l'API. FastAPI met le texte dans "detail".
+// Erreur de validation (422) -> "detail" est une liste -> message lisible.
+async function readApiError(res, fallback) {
+  try {
+    const data = await res.json();
+    if (Array.isArray(data.detail)) {
+      return 'Pseudo invalide : 2 a 30 caracteres, lettres, chiffres, - ou _ seulement.';
+    }
+    return data.detail || fallback;
+  } catch { return fallback; }
+}
+
+// --- ecran login ---
+function showRevisionLogin() {
+  const e = document.getElementById('revision-login-error');
+  clearError(e);
+  const saved = localStorage.getItem(REVISION_PSEUDO_KEY);
+  if (saved) document.getElementById('revision-pseudo-input').value = saved;
+  showScreen('screen-revision-login');
+}
+
+async function createPseudo() {
+  const e = document.getElementById('revision-login-error');
+  clearError(e);
+  const pseudo = document.getElementById('revision-pseudo-input').value.trim();
+  if (!PSEUDO_RE.test(pseudo)) {
+    showError(e, 'Pseudo invalide : 2 a 30 caracteres, lettres, chiffres, - ou _ seulement.');
+    return;
+  }
+  const res = await fetch(`${API}/study/users`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pseudo })
+  });
+  if (!res.ok) { showError(e, await readApiError(res, 'Creation impossible.')); return; }
+  const data = await res.json();
+  onPseudoReady(data.pseudo);
+}
+
+async function enterPseudo() {
+  const e = document.getElementById('revision-login-error');
+  clearError(e);
+  const pseudo = document.getElementById('revision-pseudo-input').value.trim();
+  if (!PSEUDO_RE.test(pseudo)) { showError(e, 'Pseudo invalide.'); return; }
+  const res = await fetch(`${API}/study/users/${encodeURIComponent(pseudo)}`);
+  if (!res.ok) { showError(e, await readApiError(res, 'Pseudo introuvable.')); return; }
+  const data = await res.json();
+  onPseudoReady(data.pseudo);
+}
+
+function onPseudoReady(pseudo) {
+  revisionPseudo = pseudo;
+  localStorage.setItem(REVISION_PSEUDO_KEY, pseudo);
+  document.getElementById('revision-current-pseudo').textContent = pseudo;
+  showScreen('screen-revision-setup');
+  loadRevisionSetup();
+}
+
+function revisionLogout() {
+  revisionPseudo = null;
+  showRevisionLogin();
+}
+
+// --- ecran setup : domaines -> themes (multi) -> pool ---
+const REV_DOMAIN_ORDER = ['concepts', 'architecture', 'governance'];
+const REV_DOMAIN_META = {
+  concepts:     { label: 'Concepts',     color: 'var(--dom-concepts)',     weight: '25-30%' },
+  architecture: { label: 'Architecture', color: 'var(--dom-architecture)', weight: '35-40%' },
+  governance:   { label: 'Governance',   color: 'var(--dom-governance)',   weight: '30-35%' },
+};
+const REV_THEME_LABEL = {
+  'cloud-computing': 'Cloud computing', 'cloud-benefits': 'Benefits of cloud services', 'service-types': 'Cloud service types',
+  'core-components': 'Core architectural components', 'compute-networking': 'Compute and networking', 'storage': 'Storage services', 'identity-security': 'Identity, access, and security',
+  'cost-management': 'Cost management', 'governance-compliance': 'Governance and compliance', 'resource-management': 'Managing and deploying resources', 'monitoring': 'Monitoring tools',
+};
+const REV_THEME_ORDER = {
+  concepts: ['cloud-computing', 'cloud-benefits', 'service-types'],
+  architecture: ['core-components', 'compute-networking', 'storage', 'identity-security'],
+  governance: ['cost-management', 'governance-compliance', 'resource-management', 'monitoring'],
+};
+
+let revAllCards = [];               // toutes les flashcards (chargees une fois)
+let revSelectedThemes = new Set();  // themes coches pour la session
+let revOpenDomain = null;           // domaine deplie
+let revMode = 'notion';             // notion | scenario | fiche
+
+// charge cartes + progression, puis construit l'ecran setup
+async function loadRevisionSetup() {
+  const e = document.getElementById('revision-setup-error');
+  clearError(e);
+  const cardsRes = await fetch(`${API}/flashcards`);
+  if (!cardsRes.ok) { showError(e, 'Impossible de charger les cartes.'); return; }
+  revAllCards = await cardsRes.json();
+
+  const progRes = await fetch(`${API}/study/users/${encodeURIComponent(revisionPseudo)}/progress`);
+  revProgress = {};
+  if (progRes.ok) { (await progRes.json()).forEach(p => { revProgress[p.flashcard_id] = p.status; }); }
+
+  revSelectedThemes = new Set();
+  revOpenDomain = null;
+  revMode = 'notion';
+  document.querySelectorAll('#rev-mode-row .rev-mode').forEach(el => el.classList.toggle('rev-mode-sel', el.dataset.mode === 'notion'));
+  document.getElementById('rev-pool-wrap').classList.remove('rev-pool-off');
+  renderDomainDecks();
+  renderThemePanel();
+  updateStartButton();
+}
+
+// {total, seen} pour un sous-ensemble de cartes ("vue" = deja taggee)
+function revStats(cards) {
+  let seen = 0;
+  for (const c of cards) if (c.id in revProgress) seen++;
+  return { total: cards.length, seen };
+}
+
+// le mode filtre le type de carte : notion/fiche -> notion, scenario -> scenario
+function cardTypeForMode() { return revMode === 'scenario' ? 'scenario' : 'notion'; }
+function cardsForMode(cards) {
+  const t = cardTypeForMode();
+  return cards.filter(c => (c.card_type || 'notion') === t);
+}
+
+function renderDomainDecks() {
+  const row = document.getElementById('rev-domain-row');
+  row.innerHTML = '';
+  for (const key of REV_DOMAIN_ORDER) {
+    const meta = REV_DOMAIN_META[key];
+    const cards = cardsForMode(revAllCards.filter(c => c.category === key));
+    const { total, seen } = revStats(cards);
+    const pct = total ? Math.round(100 * seen / total) : 0;
+    const open = revOpenDomain === key;
+    const el = document.createElement('div');
+    el.className = 'rev-dom' + (open ? ' open' : '');
+    el.innerHTML =
+      '<div class="rev-dom-stk2"></div><div class="rev-dom-stk1"></div>' +
+      '<div class="rev-dom-face"' + (open ? ` style="border-color:${meta.color}"` : '') + '>' +
+        `<div class="rev-dom-tab" style="background:${meta.color}"></div>` +
+        `<div class="rev-dom-name">${meta.label}</div>` +
+        `<div class="rev-dom-meta">${total} cartes - ${meta.weight}</div>` +
+        `<div class="rev-dom-track"><span class="rev-dom-fill" style="width:${pct}%;background:${meta.color}"></span></div>` +
+        `<div class="rev-dom-foot"><span class="rev-dom-prog">${seen} / ${total} vues</span><span class="rev-dom-chev">\u2304</span></div>` +
+      '</div>';
+    el.addEventListener('click', () => toggleDomain(key));
+    row.appendChild(el);
+  }
+}
+
+function toggleDomain(key) {
+  revOpenDomain = (revOpenDomain === key) ? null : key;
+  renderDomainDecks();
+  renderThemePanel();
+}
+
+function renderThemePanel() {
+  const panel = document.getElementById('rev-theme-panel');
+  panel.innerHTML = '';
+  if (!revOpenDomain) return;
+  const meta = REV_DOMAIN_META[revOpenDomain];
+  const wrap = document.createElement('div');
+  wrap.className = 'rev-panel';
+  let html = `<div class="rev-panel-h"><span class="rev-panel-dot" style="background:${meta.color}"></span>${meta.label} - choisis un ou plusieurs themes</div><div class="rev-tgrid">`;
+  for (const slug of REV_THEME_ORDER[revOpenDomain]) {
+    const cards = cardsForMode(revAllCards.filter(c => c.theme === slug));
+    const { total, seen } = revStats(cards);
+    const pct = total ? Math.round(100 * seen / total) : 0;
+    const sel = revSelectedThemes.has(slug);
+    html +=
+      `<div class="rev-tdeck${sel ? ' sel' : ''}" data-slug="${slug}">` +
+        '<div class="rev-tdeck-stk"></div>' +
+        '<div class="rev-tdeck-face"' + (sel ? ` style="border-color:${meta.color}"` : '') + '>' +
+          `<span class="rev-tdeck-check" style="color:${meta.color}">\u2713</span>` +
+          `<div class="rev-tdeck-tab" style="background:${meta.color}"></div>` +
+          `<div class="rev-tdeck-name">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</div>` +
+          `<div class="rev-tdeck-meta"><span>${total} cartes</span><span>${seen}/${total}</span></div>` +
+          `<div class="rev-tdeck-track"><span class="rev-tdeck-fill" style="width:${pct}%;background:${meta.color}"></span></div>` +
+        '</div>' +
+      '</div>';
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+  panel.appendChild(wrap);
+  wrap.querySelectorAll('.rev-tdeck').forEach(node => {
+    node.addEventListener('click', () => toggleTheme(node.dataset.slug));
+  });
+}
+
+function toggleTheme(slug) {
+  if (revSelectedThemes.has(slug)) revSelectedThemes.delete(slug);
+  else revSelectedThemes.add(slug);
+  renderThemePanel();
+  updateStartButton();
+}
+
+// bouton "Tout reviser" : tout cocher / tout decocher
+function revSelectAllThemes() {
+  const all = Object.values(REV_THEME_ORDER).flat();
+  const everySelected = all.every(s => revSelectedThemes.has(s));
+  revSelectedThemes = everySelected ? new Set() : new Set(all);
+  renderThemePanel();
+  updateStartButton();
+}
+
+function revSelectPool(pool, el) {
+  revPool = pool;
+  document.querySelectorAll('#rev-pool-row .type-btn').forEach(b => b.classList.remove('selected-type'));
+  el.classList.add('selected-type');
+  updateStartButton();
+}
+
+function revSelectedCards() {
+  return cardsForMode(revAllCards.filter(c => revSelectedThemes.has(c.theme)));
+}
+
+function updateStartButton() {
+  const btn = document.getElementById('rev-start-btn');
+  if (!btn) return;
+  const t = revSelectedThemes.size;
+  if (t === 0) { btn.textContent = 'Choisis un theme'; return; }
+  if (revMode === 'fiche') {
+    const n = revSelectedCards().length;
+    btn.textContent = `Ouvrir la fiche - ${t} theme${t > 1 ? 's' : ''} (${n})`;
+    return;
+  }
+  const n = filterByPool(revSelectedCards(), revPool).length;
+  btn.textContent = `Commencer - ${n} carte${n > 1 ? 's' : ''} - ${t} theme${t > 1 ? 's' : ''}`;
+}
+
+function shuffleRev(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+function filterByPool(cards, pool) {
+  if (pool === 'all') return cards.slice();
+  if (pool === 'new') return cards.filter(c => !(c.id in revProgress));
+  return cards.filter(c => revProgress[c.id] === pool);  // to_review | medium | acquired
+}
+
+async function startRevision() {
+  const e = document.getElementById('revision-setup-error');
+  clearError(e);
+  if (revSelectedThemes.size === 0) { showError(e, 'Choisis au moins un theme.'); return; }
+  if (revMode === 'fiche') { return startFiche(e); }
+  revCards = filterByPool(revSelectedCards(), revPool);
+  if (revCards.length === 0) { showError(e, 'Aucune carte dans ce pool. Choisis-en un autre.'); return; }
+  shuffleRev(revCards);
+  revIndex = 0;
+  renderRevCard();
+  showScreen('screen-revision-card');
+}
+
+// choix du mode d'etude (notion | scenario | fiche)
+function revSelectMode(mode) {
+  revMode = mode;
+  document.querySelectorAll('#rev-mode-row .rev-mode').forEach(el => el.classList.toggle('rev-mode-sel', el.dataset.mode === mode));
+  document.getElementById('rev-pool-wrap').classList.toggle('rev-pool-off', mode === 'fiche');
+  renderDomainDecks();
+  renderThemePanel();
+  updateStartButton();
+}
+
+// --- fiche de revision : vue generee en lecture seule (agrege les notions des themes choisis) ---
+function startFiche(e) {
+  clearError(e);
+  const cards = revSelectedCards();  // notions des themes selectionnes
+  if (cards.length === 0) { showError(e, 'Aucune notion pour cette selection.'); return; }
+  renderFiche(cards);
+  showScreen('screen-revision-fiche');
+}
+
+function renderFiche(cards) {
+  const byTheme = {};
+  cards.forEach(c => { (byTheme[c.theme] = byTheme[c.theme] || []).push(c); });
+  const ordered = REV_DOMAIN_ORDER.flatMap(d => REV_THEME_ORDER[d]).filter(t => byTheme[t]);
+
+  let html = '';
+  ordered.forEach(slug => {
+    html += `<div class="fiche-theme"><h3 class="fiche-theme-h">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</h3>`;
+    byTheme[slug].forEach((c, i) => {
+      const num = String(i + 1).padStart(2, '0');
+      const analogy = c.analogy ? `<div class="fiche-an">${escapeHtml(c.analogy)}</div>` : '';
+      html += `<div class="fiche-row">` +
+                `<span class="fiche-num">${num}</span>` +
+                `<div class="fiche-body">` +
+                  `<div class="fiche-q">${escapeHtml(c.front)}</div>` +
+                  `<div class="fiche-a">${escapeHtml(c.back)}</div>` +
+                  analogy +
+                `</div>` +
+              `</div>`;
+    });
+    html += `</div>`;
+  });
+
+  document.getElementById('rev-fiche-slot').innerHTML = html;
+  document.getElementById('rev-fiche-count').textContent =
+    `${cards.length} notions - ${ordered.length} theme${ordered.length > 1 ? 's' : ''}`;
+}
+
+// --- rendu d'une carte ---
+function tagLabel(s) { return s === 'to_review' ? 'A revoir' : s === 'medium' ? 'Moyen' : 'Acquis'; }
+
+function renderRevCard() {
+  const card = revCards[revIndex];
+  const isNotion = card.card_type !== 'scenario';
+  const typeLabel = isNotion ? 'Notion' : 'Mise en situation';
+  const cls = isNotion ? 'rev-notion' : 'rev-scenario';
+
+  document.getElementById('rev-progress').textContent = `${revIndex + 1} / ${revCards.length}`;
+
+  const analogyHtml = card.analogy
+    ? `<div class="rev-analogy">${escapeHtml(card.analogy)}</div>` : '';
+  const currentTag = revProgress[card.id]
+    ? `<div class="rev-current-tag">Tag actuel : ${tagLabel(revProgress[card.id])}</div>` : '';
+
+  document.getElementById('rev-card-slot').innerHTML = `
+    <div class="rev-flip ${cls}" id="rev-flip" onclick="flipRevCard()">
+      <div class="rev-flip-inner">
+        <div class="rev-side rev-front">
+          <span class="rev-chip">${typeLabel}</span>
+          <span class="rev-concept">${escapeHtml(card.front)}</span>
+          <span class="rev-tap">toucher pour retourner</span>
+          ${currentTag}
+        </div>
+        <div class="rev-side rev-back">
+          <span class="rev-ans-label">Reponse</span>
+          <span class="rev-ans">${escapeHtml(card.back)}</span>
+          ${analogyHtml}
+          <div class="rev-tags">
+            <button class="rev-tag rev-tag-red" onclick="tagCard(event,'to_review')">A revoir</button>
+            <button class="rev-tag rev-tag-orange" onclick="tagCard(event,'medium')">Moyen</button>
+            <button class="rev-tag rev-tag-green" onclick="tagCard(event,'acquired')">Acquis</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function flipRevCard() {
+  document.getElementById('rev-flip').classList.toggle('flipped');
+}
+
+async function tagCard(ev, status) {
+  ev.stopPropagation();  // ne pas declencher le flip de la carte
+  const card = revCards[revIndex];
+  const prev = revProgress[card.id];
+  revProgress[card.id] = status;   // mise a jour optimiste
+
+  const res = await fetch(`${API}/study/users/${encodeURIComponent(revisionPseudo)}/progress`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ flashcard_id: card.id, status })
+  });
+  if (!res.ok) {
+    // echec : on annule la mise a jour locale
+    if (prev === undefined) delete revProgress[card.id]; else revProgress[card.id] = prev;
+    console.error('Echec enregistrement du tag');
+  }
+  nextRevCard();
+}
+
+function revSkip() { nextRevCard(); }
+
+function nextRevCard() {
+  if (revIndex < revCards.length - 1) { revIndex++; renderRevCard(); }
+  else { showScreen('screen-revision-done'); }
+}
