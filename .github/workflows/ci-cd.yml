@@ -60,7 +60,7 @@ jobs:
               --resource-group msaidi \
               --image ororck/quiz-live:${{ github.sha }} \
               --revision-suffix sha${GITHUB_SHA::6} \
-              --min-replicas 1 --max-replicas 1
+              --min-replicas 0 --max-replicas 1
 
   # ─── 3. Deploy en PROD (main uniquement, gate manuel) ────────────────
   deploy-prod:
@@ -86,4 +86,4 @@ jobs:
               --resource-group msaidi \
               --image ororck/quiz-live:${{ github.sha }} \
               --revision-suffix sha${GITHUB_SHA::6} \
-              --min-replicas 1 --max-replicas 1
+              --min-replicas 0 --max-replicas 1
