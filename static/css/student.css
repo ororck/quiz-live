@@ -492,17 +492,17 @@ input[type="text"]:focus { border-color: var(--accent); }
 .fiche-theme { display: flex; flex-direction: column; }
 .fiche-theme-h {
   font-family: var(--mono); font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase;
-  color: var(--accent); border-bottom: 1px solid var(--border);
+  color: var(--fiche-c, var(--accent)); border-bottom: 1px solid var(--border);
   padding-bottom: 8px; margin: 0 0 4px;
 }
 .fiche-row { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid rgba(42,42,58,0.5); }
 .fiche-row:last-child { border-bottom: none; }
-.fiche-num { font-family: var(--mono); font-size: 0.78rem; color: var(--accent); flex-shrink: 0; width: 20px; padding-top: 2px; }
+.fiche-num { font-family: var(--mono); font-size: 0.78rem; color: var(--fiche-c, var(--accent)); flex-shrink: 0; width: 20px; padding-top: 2px; }
 .fiche-body { flex: 1; }
 .fiche-q { font-size: 0.92rem; font-weight: 700; color: var(--text); line-height: 1.35; }
 .fiche-a { font-size: 0.88rem; color: #b9b9cc; line-height: 1.5; margin-top: 3px; }
 .fiche-an { font-size: 0.8rem; color: var(--muted); font-style: italic; line-height: 1.45; margin-top: 5px; }
-.fiche-an::before { content: "\2248  "; color: var(--accent); font-style: normal; }
+.fiche-an::before { content: "\2248  "; color: var(--fiche-c, var(--accent)); font-style: normal; }
 
 @media (min-width: 760px) {
   #screen-revision-fiche { max-width: 720px; }
