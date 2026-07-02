@@ -169,7 +169,7 @@ async function createBattle() {
       `${pool.length} questions · chrono : ${timeLimitSec ? battleCfgTimerMin + ' min' : 'aucun'}`;
     document.getElementById('battle-host-count').textContent = '0';
     document.getElementById('battle-host-players').innerHTML =
-      '<div style="color:var(--muted);font-size:0.85rem;text-align:center;padding:12px 0;">En attente…</div>';
+      '<div class="wr-empty">En attente…</div>';
     showScreen('screen-battle-host-waiting');
 
     connectWS();
@@ -185,11 +185,29 @@ function addBattleHostPlayer(name) {
   battleHostPlayers.push(name);
   document.getElementById('battle-host-count').textContent = battleHostPlayers.length;
   const list = document.getElementById('battle-host-players');
-  if (list.querySelector('div[style*="En attente"]')) list.innerHTML = '';
-  const row = document.createElement('div');
-  row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:0.85rem;';
-  row.innerHTML = `<span style="width:7px;height:7px;border-radius:50%;background:var(--green);"></span>${escapeHtml(name)}`;
-  list.appendChild(row);
+  const empty = list.querySelector('.wr-empty');
+  if (empty) empty.remove();
+
+  // Avatar robot deterministe (robotSVG dans common.js) : genere localement,
+  // aucune requete reseau. textContent pour le pseudo = pas d'injection HTML.
+  const el = document.createElement('div');
+  el.className = 'wr-player';
+  const av = document.createElement('div');
+  av.className = 'wr-avatar';
+  av.innerHTML = robotSVG(name);
+  const label = document.createElement('span');
+  label.className = 'wr-name';
+  label.textContent = name;
+  el.appendChild(av);
+  el.appendChild(label);
+  list.appendChild(el);
+
+  // toast d'arrivee
+  const toast = document.getElementById('battle-host-toast');
+  toast.textContent = `${name} a rejoint la partie`;
+  toast.classList.add('show');
+  clearTimeout(addBattleHostPlayer._t);
+  addBattleHostPlayer._t = setTimeout(() => toast.classList.remove('show'), 1600);
 }
 
 async function hostStartBattle() {
@@ -946,15 +964,11 @@ function startBattleGlobalTimer() {
 }
 
 function showBattleRanking(ranking, isLive) {
-  // Une mise a jour LIVE (un joueur vient de finir) est destinee au classement
-  // temps reel du HOST. Cote joueur on ne fait rien : chacun continue sa battle
-  // jusqu'a finir lui-meme ou jusqu'a l'expiration du timer global. Sans ce
-  // garde-fou, le 1er finisseur basculait tout le monde sur l'ecran classement.
-  if (isLive) return;
-
-  // Classement final : on coupe la reconnexion auto et le timer.
-  wsShouldReconnect = false;
-  clearInterval(battleGlobalTimerInterval);
+  if (!isLive) {
+    // Classement final : on coupe la reconnexion auto et le timer.
+    wsShouldReconnect = false;
+    clearInterval(battleGlobalTimerInterval);
+  }
 
   const medals = ['🥇','🥈','🥉'];
   const classes = ['gold','silver','bronze'];
@@ -1297,25 +1311,12 @@ function renderFiche(cards) {
   cards.forEach(c => { (byTheme[c.theme] = byTheme[c.theme] || []).push(c); });
   const ordered = REV_DOMAIN_ORDER.flatMap(d => REV_THEME_ORDER[d]).filter(t => byTheme[t]);
 
-  // theme -> domaine, pour recuperer la couleur (--dom-concepts / -architecture / -governance)
-  const themeDomain = {};
-  REV_DOMAIN_ORDER.forEach(d => REV_THEME_ORDER[d].forEach(t => { themeDomain[t] = d; }));
-
   let html = '';
   ordered.forEach(slug => {
-    const color = REV_DOMAIN_META[themeDomain[slug]].color;  // ex: var(--dom-concepts)
-    html += `<div class="fiche-theme" style="--fiche-c:${color}"><h3 class="fiche-theme-h">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</h3>`;
-    byTheme[slug].forEach((c, i) => {
-      const num = String(i + 1).padStart(2, '0');
-      const analogy = c.analogy ? `<div class="fiche-an">${escapeHtml(c.analogy)}</div>` : '';
-      html += `<div class="fiche-row">` +
-                `<span class="fiche-num">${num}</span>` +
-                `<div class="fiche-body">` +
-                  `<div class="fiche-q">${escapeHtml(c.front)}</div>` +
-                  `<div class="fiche-a">${escapeHtml(c.back)}</div>` +
-                  analogy +
-                `</div>` +
-              `</div>`;
+    html += `<div class="fiche-theme"><h3 class="fiche-theme-h">${escapeHtml(REV_THEME_LABEL[slug] || slug)}</h3>`;
+    byTheme[slug].forEach(c => {
+      const analogy = c.analogy ? `<div class="fiche-analogy">${escapeHtml(c.analogy)}</div>` : '';
+      html += `<div class="fiche-item"><div class="fiche-q">${escapeHtml(c.front)}</div><div class="fiche-a">${escapeHtml(c.back)}</div>${analogy}</div>`;
     });
     html += `</div>`;
   });
@@ -1335,6 +1336,7 @@ function renderRevCard() {
   const cls = isNotion ? 'rev-notion' : 'rev-scenario';
 
   document.getElementById('rev-progress').textContent = `${revIndex + 1} / ${revCards.length}`;
+  document.getElementById('rev-bar-fill').style.width = `${((revIndex + 1) / revCards.length) * 100}%`;
 
   const analogyHtml = card.analogy
     ? `<div class="rev-analogy">${escapeHtml(card.analogy)}</div>` : '';
@@ -1365,30 +1367,185 @@ function renderRevCard() {
 }
 
 function flipRevCard() {
+  // Garde anti-conflit tap/drag : si le doigt vient de glisser, ce n'est pas un tap.
+  if (Math.abs(revDrag.dx) > 5) { revDrag.dx = 0; return; }
   document.getElementById('rev-flip').classList.toggle('flipped');
 }
 
-async function tagCard(ev, status) {
-  ev.stopPropagation();  // ne pas declencher le flip de la carte
+// --- enregistrement d'un tag : commun aux boutons, au swipe et au clavier ---
+// Optimiste : la progression locale est mise a jour et l'animation part tout
+// de suite ; le POST court en parallele et on annule localement s'il echoue.
+async function saveTag(status) {
   const card = revCards[revIndex];
   const prev = revProgress[card.id];
-  revProgress[card.id] = status;   // mise a jour optimiste
+  revProgress[card.id] = status;
 
   const res = await fetch(`${API}/study/users/${encodeURIComponent(revisionPseudo)}/progress`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ flashcard_id: card.id, status })
   });
   if (!res.ok) {
-    // echec : on annule la mise a jour locale
     if (prev === undefined) delete revProgress[card.id]; else revProgress[card.id] = prev;
     console.error('Echec enregistrement du tag');
   }
-  nextRevCard();
 }
 
-function revSkip() { nextRevCard(); }
+let revAnimating = false;   // bloque tout geste pendant la sortie de carte
+
+// Sortie animee : dir = 1 (droite/acquis), -1 (gauche/a revoir), 0 (bas/moyen ou skip).
+// Le transform s'applique au conteneur .rev-flip (translateX/rotate) ; le flip
+// vit sur .rev-flip-inner (rotateY) : les deux ne se marchent jamais dessus.
+function animateCardOut(dir) {
+  const flip = document.getElementById('rev-flip');
+  if (!flip || revAnimating) return;
+  revAnimating = true;
+  flip.style.transition = 'transform 0.35s ease, opacity 0.3s ease';
+  flip.style.transform = dir === 0 ? 'translateY(60px)' : `translateX(${dir * 560}px) rotate(${dir * 18}deg)`;
+  flip.style.opacity = '0';
+  setTimeout(nextRevCard, 300);
+}
+
+async function tagCard(ev, status) {
+  ev.stopPropagation();  // ne pas declencher le flip de la carte
+  if (revAnimating) return;
+  saveTag(status);       // volontairement sans await : l'animation part immediatement
+  animateCardOut(status === 'acquired' ? 1 : status === 'to_review' ? -1 : 0);
+}
+
+function revSkip() { if (!revAnimating) animateCardOut(0); }
 
 function nextRevCard() {
+  revAnimating = false;
+  document.getElementById('rev-side-left').classList.remove('lit');
+  document.getElementById('rev-side-right').classList.remove('lit');
+  // renderRevCard() reconstruit le slot : transform et opacity repartent a neuf
   if (revIndex < revCards.length - 1) { revIndex++; renderRevCard(); }
   else { showScreen('screen-revision-done'); }
 }
+
+// --- swipe : delegation sur le slot, survit aux re-render de renderRevCard ---
+// Pointer Events = souris ET tactile avec un seul jeu de listeners.
+let revDrag = { active: false, startX: 0, dx: 0 };
+
+document.getElementById('rev-card-slot').addEventListener('pointerdown', (e) => {
+  const flip = document.getElementById('rev-flip');
+  if (!flip || revAnimating) return;
+  if (e.target.closest('.rev-tag')) return;   // laisser les boutons de tag cliquables
+  revDrag = { active: true, startX: e.clientX, dx: 0 };
+  flip.style.transition = 'none';             // suivi direct du doigt, pas d'animation
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!revDrag.active) return;
+  const flip = document.getElementById('rev-flip');
+  if (!flip) return;
+  revDrag.dx = e.clientX - revDrag.startX;
+  flip.style.transform = `translateX(${revDrag.dx}px) rotate(${revDrag.dx / 18}deg)`;
+  // feedback avant de lacher : bords teintes + label allume selon la direction
+  flip.classList.toggle('swipe-ok', revDrag.dx > 40);
+  flip.classList.toggle('swipe-ko', revDrag.dx < -40);
+  document.getElementById('rev-side-right').classList.toggle('lit', revDrag.dx > 40);
+  document.getElementById('rev-side-left').classList.toggle('lit', revDrag.dx < -40);
+});
+
+window.addEventListener('pointerup', () => {
+  if (!revDrag.active) return;
+  revDrag.active = false;
+  const flip = document.getElementById('rev-flip');
+  if (!flip) return;
+  if (Math.abs(revDrag.dx) > 90) {
+    // seuil franchi : swipe = auto-evaluation binaire (Moyen reste sur les boutons)
+    const status = revDrag.dx > 0 ? 'acquired' : 'to_review';
+    saveTag(status);
+    animateCardOut(revDrag.dx > 0 ? 1 : -1);
+  } else {
+    // seuil non franchi : retour au centre
+    flip.style.transition = 'transform 0.3s ease';
+    flip.style.transform = '';
+    flip.classList.remove('swipe-ok', 'swipe-ko');
+    document.getElementById('rev-side-left').classList.remove('lit');
+    document.getElementById('rev-side-right').classList.remove('lit');
+  }
+});
+
+// --- clavier (desktop) : fleche gauche = a revoir, droite = acquis,
+//     bas = moyen, espace = retourner la carte ---
+window.addEventListener('keydown', (e) => {
+  if (!document.getElementById('screen-revision-card').classList.contains('active')) return;
+  if (revAnimating) return;
+  if (e.key === 'ArrowRight')     { saveTag('acquired');  animateCardOut(1); }
+  else if (e.key === 'ArrowLeft') { saveTag('to_review'); animateCardOut(-1); }
+  else if (e.key === 'ArrowDown') { saveTag('medium');    animateCardOut(0); }
+  else if (e.key === ' ')         { e.preventDefault(); document.getElementById('rev-flip').classList.toggle('flipped'); }
+});
+
+
+// ================= COLD START (scale-to-zero) =================
+// Avec min-replicas 0, le premier visiteur apres une periode d'inactivite
+// paie le demarrage a froid du Container App (5 a 30 s). Au chargement :
+//   - /healthz repond en moins de 700 ms -> serveur chaud, rien ne s'affiche
+//   - plus lent -> ecran de reveil jusqu'a la reponse
+// La progression de l'anneau est asymptotique : elle avance vite puis ralentit
+// vers 90 % (la duree reelle est inconnue) et saute a 100 % a la reponse.
+
+const CS_TIPS = [
+  "Le scale-to-zero coupe les couts a zero quand l'app dort, au prix de ce demarrage a froid.",
+  "Une Availability Zone = un ou plusieurs datacenters avec alimentation et reseau independants.",
+  "OpEx vs CapEx : le cloud transforme un gros investissement initial en depense a l'usage.",
+  "Azure Policy audite ou bloque, RBAC donne des permissions : deux reponses differentes a l'examen.",
+  "99,9 % d'uptime = environ 8 h 45 d'indisponibilite par an. 99,99 % = 52 minutes.",
+  "L'elasticite ajuste les ressources automatiquement a la demande ; la scalabilite est la capacite a le faire."
+];
+
+(function checkColdStart() {
+  const overlay = document.getElementById('coldstart');
+  let done = false, shown = false, prog = 0, ticker = null, tipTimer = null;
+
+  const probe = fetch(`${API}/healthz`).catch(() => null);
+
+  // n'afficher l'ecran que si le serveur tarde (evite un flash quand il est chaud)
+  const showTimer = setTimeout(() => {
+    if (done) return;
+    shown = true;
+    overlay.style.display = 'flex';
+    startColdStartAnimations();
+  }, 700);
+
+  function setProgress(p) {
+    prog = p;
+    // circonference = 2 * PI * 52 = 327 ; dashoffset 327 = anneau vide, 0 = plein
+    document.getElementById('cs-fill').style.strokeDashoffset = 327 - (327 * p / 100);
+    document.getElementById('cs-step-1').classList.toggle('done', p >= 30);
+    document.getElementById('cs-step-2').classList.toggle('done', p >= 65);
+    document.getElementById('cs-step-3').classList.toggle('done', p >= 98);
+  }
+
+  function startColdStartAnimations() {
+    let tipIdx = Math.floor(Math.random() * CS_TIPS.length);
+    const body = document.getElementById('cs-tip-body');
+    const text = document.getElementById('cs-tip-text');
+    text.textContent = CS_TIPS[tipIdx];
+    tipTimer = setInterval(() => {
+      body.classList.add('out');
+      setTimeout(() => {
+        tipIdx = (tipIdx + 1) % CS_TIPS.length;
+        text.textContent = CS_TIPS[tipIdx];
+        body.classList.remove('out');
+      }, 380);
+    }, 4500);
+    ticker = setInterval(() => setProgress(prog + (90 - prog) * 0.05), 300);
+  }
+
+  probe.finally(() => {
+    done = true;
+    clearTimeout(showTimer);
+    if (!shown) return;               // serveur chaud : l'ecran n'a jamais ete montre
+    clearInterval(ticker);
+    clearInterval(tipTimer);
+    setProgress(100);
+    setTimeout(() => {
+      overlay.style.opacity = '0';
+      setTimeout(() => { overlay.style.display = 'none'; overlay.style.opacity = '1'; }, 400);
+    }, 450);
+  });
+})();
