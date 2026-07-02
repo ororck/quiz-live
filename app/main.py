@@ -26,12 +26,14 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.get("/healthz")
-def healthz():
+async def healthz():
     """Sonde legere pour le front : detection du cold start (scale-to-zero).
 
     Repond des que le process est demarre. Le front l'appelle au chargement
     de la page et affiche un ecran de reveil tant qu'elle ne repond pas.
     """
+    import asyncio  # TEMPORAIRE : a retirer une fois le test de declenchement fait
+    await asyncio.sleep(3)  # TEMPORAIRE : force le cold start pour verifier le JS
     return {"status": "ok"}
 
 
