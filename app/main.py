@@ -323,16 +323,19 @@ async def join_session(request: Request, code: str, payload: schemas.Participant
             "participant_id": existing_pid,
             "display_name": payload.display_name,
         })
-        return schemas.ParticipantOut(id=existing_pid, display_name=payload.display_name)
+        others = [name for pid, name in s.participants.items() if pid != existing_pid]
+        return schemas.ParticipantOut(id=existing_pid, display_name=payload.display_name, existing_players=others)
 
     # Nouveau participant
+    # Snapshot AVANT d'ajouter le nouveau, pour ne pas se lister soi-meme.
+    others = list(s.participants.values())
     pid = s.add_participant(payload.display_name)
     await manager.broadcast(code, {
         "type": "participant_join",
         "participant_id": pid,
         "display_name": payload.display_name,
     })
-    return schemas.ParticipantOut(id=pid, display_name=payload.display_name)
+    return schemas.ParticipantOut(id=pid, display_name=payload.display_name, existing_players=others)
 
 
 # ---------------------------------------------------------------------------
