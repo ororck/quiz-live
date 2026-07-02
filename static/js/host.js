@@ -572,9 +572,20 @@ function addParticipant(data) {
   count.textContent = participants.length;
   const list = document.getElementById('participants-list');
   if (list.querySelector('.empty-state')) list.innerHTML = '';
+
+  // Avatar robot deterministe (robotSVG dans common.js) : meme pseudo,
+  // meme robot, cote formateur comme cote joueur. Genere en local, aucune
+  // requete reseau. textContent pour le pseudo = pas d'injection HTML.
+  const name = data.display_name || 'Anonyme';
   const item = document.createElement('div');
   item.className = 'participant-item';
-  item.innerHTML = `<span class="participant-dot"></span>${escapeHtml(data.display_name || 'Anonyme')}`;
+  const av = document.createElement('span');
+  av.className = 'participant-avatar';
+  av.innerHTML = robotSVG(name);
+  const label = document.createElement('span');
+  label.textContent = name;
+  item.appendChild(av);
+  item.appendChild(label);
   list.appendChild(item);
 }
 

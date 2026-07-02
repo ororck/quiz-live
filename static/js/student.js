@@ -210,6 +210,32 @@ function addBattleHostPlayer(name) {
   addBattleHostPlayer._t = setTimeout(() => toast.classList.remove('show'), 1600);
 }
 
+// Meme logique qu'addBattleHostPlayer, mais pour l'ecran du joueur qui a
+// REJOINT une battle (screen-battle-waiting). Les deux existent separement
+// car ce sont deux ecrans HTML distincts avec des ids differents ; les
+// fusionner demanderait de renommer les ids partages avec d'autres ecrans.
+let battleWaitingPlayers = [];
+function addBattleWaitingPlayer(name) {
+  if (battleWaitingPlayers.includes(name)) return;
+  battleWaitingPlayers.push(name);
+  document.getElementById('battle-waiting-count').textContent = battleWaitingPlayers.length;
+  const list = document.getElementById('battle-waiting-players');
+  const empty = list.querySelector('.wr-empty');
+  if (empty) empty.remove();
+
+  const el = document.createElement('div');
+  el.className = 'wr-player';
+  const av = document.createElement('div');
+  av.className = 'wr-avatar';
+  av.innerHTML = robotSVG(name);
+  const label = document.createElement('span');
+  label.className = 'wr-name';
+  label.textContent = name;
+  el.appendChild(av);
+  el.appendChild(label);
+  list.appendChild(el);
+}
+
 async function hostStartBattle() {
   const btn = document.getElementById('btn-host-start-battle');
   btn.textContent = 'Lancement…';
@@ -255,6 +281,9 @@ async function joinSession() {
     mode = 'battle';
     document.getElementById('battle-waiting-code').textContent = code;
     document.getElementById('battle-waiting-info').textContent = 'En attente du lancement par le créateur…';
+    battleWaitingPlayers = [];
+    document.getElementById('battle-waiting-count').textContent = '0';
+    document.getElementById('battle-waiting-players').innerHTML = '<div class="wr-empty">En attente…</div>';
     showScreen('screen-battle-waiting');
     connectWS();
   } else {
@@ -468,6 +497,10 @@ function connectWS() {
       // Le créateur de battle voit les joueurs arriver dans sa salle d'attente
       if (isBattleHost && document.getElementById('screen-battle-host-waiting').classList.contains('active')) {
         addBattleHostPlayer(msg.display_name || 'Anonyme');
+      }
+      // Un joueur qui a REJOINT (pas le créateur) voit aussi la liste s'animer
+      if (!isBattleHost && document.getElementById('screen-battle-waiting').classList.contains('active')) {
+        addBattleWaitingPlayer(msg.display_name || 'Anonyme');
       }
 
     } else if (msg.type === 'question_start') {
