@@ -25,6 +25,18 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+@app.get("/healthz")
+async def healthz():
+    """Sonde legere pour le front : detection du cold start (scale-to-zero).
+
+    Repond des que le process est demarre. Le front l'appelle au chargement
+    de la page et affiche un ecran de reveil tant qu'elle ne repond pas.
+    """
+    import asyncio  # TEMPORAIRE : a retirer une fois le test de declenchement fait
+    await asyncio.sleep(3)  # TEMPORAIRE : force le cold start pour verifier le JS
+    return {"status": "ok"}
+
+
 # ---------------------------------------------------------------------------
 # Structures de données en mémoire (sessions, participants, questions, réponses)
 # Ces données sont éphémères : elles disparaissent quand le container redémarre.
@@ -311,16 +323,19 @@ async def join_session(request: Request, code: str, payload: schemas.Participant
             "participant_id": existing_pid,
             "display_name": payload.display_name,
         })
-        return schemas.ParticipantOut(id=existing_pid, display_name=payload.display_name)
+        others = [name for pid, name in s.participants.items() if pid != existing_pid]
+        return schemas.ParticipantOut(id=existing_pid, display_name=payload.display_name, existing_players=others)
 
     # Nouveau participant
+    # Snapshot AVANT d'ajouter le nouveau, pour ne pas se lister soi-meme.
+    others = list(s.participants.values())
     pid = s.add_participant(payload.display_name)
     await manager.broadcast(code, {
         "type": "participant_join",
         "participant_id": pid,
         "display_name": payload.display_name,
     })
-    return schemas.ParticipantOut(id=pid, display_name=payload.display_name)
+    return schemas.ParticipantOut(id=pid, display_name=payload.display_name, existing_players=others)
 
 
 # ---------------------------------------------------------------------------
@@ -409,9 +424,7 @@ def _battle_ranking_final(s: SessionState) -> list[schemas.BattleRankEntry]:
         max_elapsed = 0.0
 
     entries = []
-    # Tous les participants vivants (roster figé + arrivants tardifs), pas le
-    # seul snapshot du lancement : sinon un joueur arrivé apres start disparait.
-    for pid in s.participants.keys():
+    for pid in s.battle_roster:
         if pid in s.finished:
             info = s.finished[pid]
             entries.append(schemas.BattleRankEntry(
@@ -509,11 +522,7 @@ async def battle_finish(code: str, payload: schemas.BattleFinish):
 
     # Le dernier joueur du roster à finir déclenche le classement final.
     # Sinon, on pousse un classement LIVE partiel (ceux qui ont déjà fini).
-    # Référentiel = participants vivants (roster + arrivants tardifs). Le
-    # garde-fou bool(expected) neutralise le piège du sous-ensemble vide :
-    # set().issubset(...) vaut True, ce qui clôturait la battle au 1er finish.
-    expected = set(s.participants.keys())
-    all_finished = bool(expected) and expected.issubset(s.finished.keys())
+    all_finished = set(s.battle_roster).issubset(s.finished.keys())
     ranking = None
     if all_finished:
         ranking = _battle_ranking_final(s)
