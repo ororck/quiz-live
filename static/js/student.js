@@ -1038,7 +1038,16 @@ function showBattleRanking(ranking, isLive) {
     titleEl.textContent = isLive ? '⚔️ CLASSEMENT EN COURS…' : '⚔️ CLASSEMENT FINAL';
   }
 
-  showScreen('screen-battle-ranking');
+  // BUG CORRIGE : un classement LIVE (battle_ranking_update) est diffuse a
+  // TOUS les joueurs de la session des qu'un seul finit. Forcer l'ecran ici
+  // arrachait les joueurs encore en train de repondre a leurs questions.
+  // On ne bascule l'ecran que pour le classement FINAL (isLive=false) ; un
+  // classement live ne fait que mettre a jour le tableau en arriere-plan,
+  // visible seulement si le joueur est deja sur cet ecran (parce qu'il a
+  // lui-meme deja fini, cf. screen-battle-score).
+  if (!isLive) {
+    showScreen('screen-battle-ranking');
+  }
 }
 
 
