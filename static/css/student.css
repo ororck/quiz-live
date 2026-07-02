@@ -569,7 +569,8 @@ input[type="text"]:focus { border-color: var(--accent); }
 .cs-tip {
   width: 100%; max-width: 340px; background: var(--surface);
   border: 1px solid var(--border); border-radius: 12px;
-  padding: 14px; display: flex; gap: 12px; align-items: flex-start;
+  padding: 14px; gap: 12px; align-items: flex-start;
+  display: none;   /* affiche par JS (startTips) seulement si /healthz tarde */
 }
 .cs-bulb { flex-shrink: 0; width: 32px; height: 32px; border-radius: 9px; background: rgba(255,159,67,0.13); display: flex; align-items: center; justify-content: center; font-size: 1rem; }
 .cs-tip-body { display: flex; flex-direction: column; gap: 4px; transition: opacity 0.35s, transform 0.35s; }
