@@ -285,6 +285,10 @@ async function joinSession() {
     document.getElementById('battle-waiting-count').textContent = '0';
     document.getElementById('battle-waiting-players').innerHTML = '<div class="wr-empty">En attente…</div>';
     showScreen('screen-battle-waiting');
+    // Snapshot des joueurs deja presents (renvoye par /join) : on les affiche
+    // tout de suite, sans attendre un futur message WebSocket qui ne parlera
+    // que des PROCHAINES arrivees, pas de celles qui ont eu lieu avant nous.
+    (data.existing_players || []).forEach(addBattleWaitingPlayer);
     connectWS();
   } else {
     // --- Mode Live classique ---
@@ -1515,11 +1519,19 @@ window.addEventListener('keydown', (e) => {
 
 // ================= COLD START (scale-to-zero) =================
 // Avec min-replicas 0, le premier visiteur apres une periode d'inactivite
-// paie le demarrage a froid du Container App (5 a 30 s). Au chargement :
-//   - /healthz repond en moins de 700 ms -> serveur chaud, rien ne s'affiche
-//   - plus lent -> ecran de reveil jusqu'a la reponse
-// La progression de l'anneau est asymptotique : elle avance vite puis ralentit
-// vers 90 % (la duree reelle est inconnue) et saute a 100 % a la reponse.
+// paie le demarrage a froid du Container App (5 a 30 s).
+//
+// L'overlay est visible DES LE HTML (display:flex par defaut, voir
+// student.html), donc il n'y a jamais de flash de l'ecran d'accueil avant
+// lui : le navigateur peint l'overlay AVANT que ce script ne s'execute.
+//   - /healthz repond vite (< 500 ms) -> on masque l'overlay tout de suite,
+//     l'utilisateur n'a quasiment rien vu.
+//   - plus lent -> a 500 ms on bascule le message sur "Reveil du serveur"
+//     et on demarre les animations (anneau, etapes, astuces), jusqu'a la
+//     reponse.
+// La progression de l'anneau est asymptotique : elle avance vite puis
+// ralentit vers 90 % (la duree reelle est inconnue) et saute a 100 % a la
+// reponse.
 
 const CS_TIPS = [
   "Le scale-to-zero coupe les couts a zero quand l'app dort, au prix de ce demarrage a froid.",
@@ -1532,17 +1544,9 @@ const CS_TIPS = [
 
 (function checkColdStart() {
   const overlay = document.getElementById('coldstart');
-  let done = false, shown = false, prog = 0, ticker = null, tipTimer = null;
+  let done = false, revealed = false, prog = 0, ticker = null, tipTimer = null;
 
   const probe = fetch(`${API}/healthz`).catch(() => null);
-
-  // n'afficher l'ecran que si le serveur tarde (evite un flash quand il est chaud)
-  const showTimer = setTimeout(() => {
-    if (done) return;
-    shown = true;
-    overlay.style.display = 'flex';
-    startColdStartAnimations();
-  }, 700);
 
   function setProgress(p) {
     prog = p;
@@ -1553,10 +1557,24 @@ const CS_TIPS = [
     document.getElementById('cs-step-3').classList.toggle('done', p >= 98);
   }
 
-  function startColdStartAnimations() {
+  // Anneau et etapes tournent des le debut : si la reponse met 400ms, on
+  // voit deja un peu de mouvement au lieu d'un ecran fige.
+  ticker = setInterval(() => setProgress(prog + (90 - prog) * 0.05), 300);
+
+  // A 500ms : si toujours pas de reponse, on affiche le vrai message et
+  // les astuces -- ca ne se produit QUE dans un vrai cold start.
+  const revealTimer = setTimeout(() => {
+    if (done) return;
+    revealed = true;
+    document.querySelector('.cs-title').textContent = 'Réveil du serveur…';
+    startTips();
+  }, 500);
+
+  function startTips() {
     let tipIdx = Math.floor(Math.random() * CS_TIPS.length);
     const body = document.getElementById('cs-tip-body');
     const text = document.getElementById('cs-tip-text');
+    document.querySelector('.cs-tip').style.display = 'flex';
     text.textContent = CS_TIPS[tipIdx];
     tipTimer = setInterval(() => {
       body.classList.add('out');
@@ -1566,19 +1584,28 @@ const CS_TIPS = [
         body.classList.remove('out');
       }, 380);
     }, 4500);
-    ticker = setInterval(() => setProgress(prog + (90 - prog) * 0.05), 300);
   }
+
+  const pageLoadedAt = Date.now();
+  const MIN_DISPLAY_MS = 2000;   // l'ecran reste visible au moins 2s, meme si le serveur est chaud
 
   probe.finally(() => {
     done = true;
-    clearTimeout(showTimer);
-    if (!shown) return;               // serveur chaud : l'ecran n'a jamais ete montre
+    clearTimeout(revealTimer);
     clearInterval(ticker);
     clearInterval(tipTimer);
-    setProgress(100);
+    // Plancher : /healthz peut repondre en 20ms, mais l'ecran doit rester
+    // lisible au moins MIN_DISPLAY_MS depuis le tout premier affichage.
+    // setProgress(100) est retarde jusqu'a juste avant la fermeture reelle,
+    // sinon l'anneau sauterait a 100% puis resterait fige pendant l'attente.
+    const elapsed = Date.now() - pageLoadedAt;
+    const remaining = Math.max(MIN_DISPLAY_MS - elapsed, 0);
     setTimeout(() => {
-      overlay.style.opacity = '0';
-      setTimeout(() => { overlay.style.display = 'none'; overlay.style.opacity = '1'; }, 400);
-    }, 450);
+      setProgress(100);
+      setTimeout(() => {
+        overlay.style.opacity = '0';
+        setTimeout(() => { overlay.style.display = 'none'; overlay.style.opacity = '1'; }, 400);
+      }, 200);
+    }, remaining);
   });
 })();

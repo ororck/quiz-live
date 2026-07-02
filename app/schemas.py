@@ -44,6 +44,11 @@ class ParticipantCreate(BaseModel):
 class ParticipantOut(BaseModel):
     id: int
     display_name: str
+    # Liste des pseudos deja presents dans la session au moment du join.
+    # Permet au joueur qui arrive de peupler sa salle d'attente immediatement,
+    # sans attendre les futurs messages WebSocket participant_join (qui ne
+    # concernent que les arrivees APRES lui).
+    existing_players: list[str] = []
 
 
 # --- Question live (mémoire) ---
