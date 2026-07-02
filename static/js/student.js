@@ -946,11 +946,15 @@ function startBattleGlobalTimer() {
 }
 
 function showBattleRanking(ranking, isLive) {
-  if (!isLive) {
-    // Classement final : on coupe la reconnexion auto et le timer.
-    wsShouldReconnect = false;
-    clearInterval(battleGlobalTimerInterval);
-  }
+  // Une mise a jour LIVE (un joueur vient de finir) est destinee au classement
+  // temps reel du HOST. Cote joueur on ne fait rien : chacun continue sa battle
+  // jusqu'a finir lui-meme ou jusqu'a l'expiration du timer global. Sans ce
+  // garde-fou, le 1er finisseur basculait tout le monde sur l'ecran classement.
+  if (isLive) return;
+
+  // Classement final : on coupe la reconnexion auto et le timer.
+  wsShouldReconnect = false;
+  clearInterval(battleGlobalTimerInterval);
 
   const medals = ['🥇','🥈','🥉'];
   const classes = ['gold','silver','bronze'];
