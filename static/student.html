@@ -70,6 +70,13 @@
         <p>Révise tes notions en flashcards, à ton rythme</p>
       </div>
     </div>
+    <div class="mode-card" onclick="showExamSetup()">
+      <div class="mode-icon">📝</div>
+      <div class="mode-info">
+        <h3>Examen blanc</h3>
+        <p>Passe un examen AZ-900 en conditions réelles</p>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -244,6 +251,9 @@
         </div>
         <div class="module-chip selected-chip" data-cats='["az-900"]' onclick="toggleModule(this)" style="grid-column:span 2;">
           <span>📚 AZ-900 Original</span><small>484 questions</small>
+        </div>
+        <div class="module-chip" data-cats='["exam-blanc-a","exam-blanc-b","exam-blanc-c","exam-blanc-d","exam-blanc-e","exam-blanc-f"]' onclick="toggleModule(this)" style="grid-column:span 2;">
+          <span>🎯 Examen blanc</span><small>300 questions</small>
         </div>
       </div>
     </div>
@@ -597,6 +607,184 @@
   </div>
   <div class="card" style="gap:10px;display:flex;flex-direction:column;">
     <div class="ranking-table" id="student-ranking-table"></div>
+  </div>
+  <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour à l'accueil</button>
+</div>
+
+<!-- ============ ÉCRANS EXAMEN BLANC ============ -->
+
+<!-- EXAM SETUP : choix test + format + difficulté -->
+<div class="screen" id="screen-exam-setup">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <div class="exam-badge-pill">📝 EXAMEN BLANC AZ-900</div>
+    <h2>Conditions réelles</h2>
+    <p style="font-size:0.85rem;color:var(--muted);line-height:1.6;">
+      Pas de feedback pendant l'épreuve. Score sur 1000, seuil de réussite à 700.
+      Navigation libre une fois toutes les questions répondues.
+    </p>
+
+    <div class="field">
+      <label>Ton prénom</label>
+      <input type="text" id="exam-name-input" placeholder="Mohamed" maxlength="24">
+    </div>
+
+    <div class="field">
+      <label>Quel examen ?</label>
+      <div class="exam-test-grid" id="exam-test-grid">
+        <div class="exam-test-chip selected-chip" data-test="a" onclick="selectExamTest('a')">A</div>
+        <div class="exam-test-chip" data-test="b" onclick="selectExamTest('b')">B</div>
+        <div class="exam-test-chip" data-test="c" onclick="selectExamTest('c')">C</div>
+        <div class="exam-test-chip" data-test="d" onclick="selectExamTest('d')">D</div>
+        <div class="exam-test-chip" data-test="e" onclick="selectExamTest('e')">E</div>
+        <div class="exam-test-chip" data-test="f" onclick="selectExamTest('f')">F</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Format</label>
+      <div style="display:flex;gap:8px;">
+        <div class="mode-card" id="exam-fmt-10" style="flex:1;padding:12px;" onclick="selectExamFormat(10)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">10 min</h3><p style="font-size:0.65rem;" id="exam-fmt-10-q">10 questions</p></div>
+        </div>
+        <div class="mode-card" id="exam-fmt-20" style="flex:1;padding:12px;" onclick="selectExamFormat(20)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">20 min</h3><p style="font-size:0.65rem;" id="exam-fmt-20-q">20 questions</p></div>
+        </div>
+        <div class="mode-card selected-theme" id="exam-fmt-45" style="flex:1;padding:12px;" onclick="selectExamFormat(45)">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">45 min</h3><p style="font-size:0.65rem;" id="exam-fmt-45-q">50 questions</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Difficulté</label>
+      <div style="display:flex;gap:8px;">
+        <div class="mode-card selected-theme" id="exam-diff-normal" style="flex:1;padding:12px;" onclick="selectExamDiff('normal')">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">Normal</h3></div>
+        </div>
+        <div class="mode-card" id="exam-diff-hard" style="flex:1;padding:12px;" onclick="selectExamDiff('hard')">
+          <div class="mode-info"><h3 style="font-size:0.85rem;">🔥 Difficile</h3><p style="font-size:0.6rem;">2x plus de questions</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="exam-summary" id="exam-summary">Examen A · 50 questions · 45 min</div>
+
+    <button class="btn btn-confirm" onclick="startSoloExam()" id="btn-start-exam">Commencer l'examen →</button>
+    <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour</button>
+  </div>
+</div>
+
+<!-- EXAM QUESTION : navigation semi-libre + chrono + marquage -->
+<div class="screen" id="screen-exam-question">
+  <div class="logo">QUIZ_LIVE</div>
+
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;padding:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);" id="exam-counter">Question 1 / 50</span>
+      <span class="exam-timer" id="exam-timer">45:00</span>
+    </div>
+    <div class="exam-progress-bar-wrap">
+      <div class="exam-progress-bar" id="exam-progress-bar" style="width:0%"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-family:var(--mono);font-size:0.62rem;color:var(--muted);" id="exam-answered-count">0 répondue(s)</span>
+      <label class="exam-flag-toggle">
+        <input type="checkbox" id="exam-flag-check" onchange="toggleExamFlag()">
+        <span>🚩 Marquer pour révision</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;">
+    <p id="exam-q-text" style="font-size:0.95rem;line-height:1.6;color:var(--text);font-weight:500;"></p>
+    <div class="choices-grid" id="exam-choices-grid"></div>
+    <p style="text-align:center;font-size:0.78rem;color:var(--muted);" id="exam-q-hint">Sélectionne ta réponse</p>
+  </div>
+
+  <div class="exam-nav-row">
+    <button class="btn btn-ghost" id="exam-prev-btn" onclick="examPrev()">← Précédent</button>
+    <button class="btn btn-ghost" id="exam-review-btn" onclick="showExamReview()" style="display:none;">Revoir tout</button>
+    <button class="btn btn-confirm" id="exam-next-btn" onclick="examNext()">Suivant →</button>
+  </div>
+</div>
+
+<!-- EXAM REVIEW : grille des questions avant validation finale -->
+<div class="screen" id="screen-exam-review">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:12px;display:flex;flex-direction:column;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="exam-badge-pill">📝 RÉVISION DES RÉPONSES</div>
+      <span class="exam-timer" id="exam-review-timer">45:00</span>
+    </div>
+    <p style="font-size:0.82rem;color:var(--muted);">Clique une question pour y revenir. Gris = répondu, rouge = sans réponse, jaune = marquée.</p>
+    <div class="exam-review-grid" id="exam-review-grid"></div>
+    <div class="exam-review-legend">
+      <span><i class="exam-dot answered"></i> Répondu</span>
+      <span><i class="exam-dot empty"></i> Sans réponse</span>
+      <span><i class="exam-dot flagged"></i> Marquée</span>
+    </div>
+  </div>
+  <button class="btn btn-confirm" onclick="confirmExamFinish()" id="exam-finish-btn">Terminer l'examen ✓</button>
+  <button class="btn btn-ghost" onclick="examBackToQuestions()">Continuer l'examen</button>
+</div>
+
+<!-- EXAM SCORE : record /1000 + breakdown + questions ratées -->
+<div class="screen" id="screen-exam-score">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:12px;display:flex;flex-direction:column;align-items:center;">
+    <div class="exam-verdict" id="exam-verdict"></div>
+    <div class="exam-score-big" id="exam-score-big">–</div>
+    <div class="score-label">SCORE / 1000</div>
+    <p style="text-align:center;font-size:0.85rem;color:var(--muted);" id="exam-score-sub"></p>
+  </div>
+
+  <!-- Détail par examen -->
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;">
+    <h2 style="font-size:1rem;">📊 Détail par examen</h2>
+    <div id="exam-breakdown-bars"></div>
+  </div>
+
+  <!-- Attente classement (multijoueur uniquement) -->
+  <div class="card" id="exam-waiting-ranking" style="gap:10px;display:flex;flex-direction:column;align-items:center;display:none;">
+    <div class="waiting-icon" style="font-size:2rem;animation-duration:3s;">⏳</div>
+    <p style="text-align:center;">En attente des autres joueurs…<br>Le classement s'affichera quand tout le monde aura terminé.</p>
+  </div>
+
+  <!-- Questions ratées + explications -->
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;" id="exam-wrong-section">
+    <h2 style="font-size:1rem;">❌ Questions à retravailler</h2>
+    <div id="exam-wrong-list"></div>
+  </div>
+
+  <button class="btn btn-primary" onclick="location.reload()" id="exam-replay-btn">Nouvel examen →</button>
+  <button class="btn btn-ghost" onclick="location.reload()">Retour à l'accueil</button>
+</div>
+
+<!-- EXAM WAITING (multijoueur) : rejoindre une session examen host -->
+<div class="screen" id="screen-exam-waiting">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:16px;display:flex;flex-direction:column;align-items:center;">
+    <div class="exam-badge-pill">📝 EXAMEN EN GROUPE</div>
+    <h2 style="text-align:center">Code de session</h2>
+    <div class="session-badge" id="exam-waiting-code"></div>
+    <p style="text-align:center;font-size:0.85rem;" id="exam-waiting-info">En attente du lancement par le formateur…</p>
+  </div>
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;">
+    <label style="font-size:0.8rem;color:var(--muted);">CANDIDATS <span id="exam-waiting-count" style="color:var(--accent);">0</span></label>
+    <div id="exam-waiting-players" class="wr-grid"><div class="wr-empty">En attente…</div></div>
+  </div>
+</div>
+
+<!-- EXAM RANKING (multijoueur) : classement final -->
+<div class="screen" id="screen-exam-ranking">
+  <div class="logo">QUIZ_LIVE</div>
+  <div class="card" style="gap:12px;display:flex;flex-direction:column;">
+    <div class="exam-badge-pill" id="exam-ranking-title">📝 CLASSEMENT FINAL</div>
+    <h2 style="margin-top:8px;">Résultats de l'examen</h2>
+  </div>
+  <div class="card" style="gap:10px;display:flex;flex-direction:column;">
+    <div class="ranking-table" id="exam-ranking-table"></div>
   </div>
   <button class="btn btn-ghost" onclick="showScreen('screen-home')">Retour à l'accueil</button>
 </div>
