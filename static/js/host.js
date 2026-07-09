@@ -552,6 +552,9 @@ function connectWS() {
       addParticipant(msg);
       // Mettre à jour le compteur battle si on est en salle d'attente battle
       document.getElementById('battle-joined-count').textContent = participants.length;
+      // Compteur candidats examen
+      const examJoined = document.getElementById('exam-joined-count');
+      if (examJoined) examJoined.textContent = participants.length;
     } else if (msg.type === 'answer_received') {
       answerCount = msg.total_answers;
       document.getElementById('answer-count-num').textContent = answerCount;
@@ -559,6 +562,10 @@ function connectWS() {
       showBattleRanking(msg.ranking, false);
     } else if (msg.type === 'battle_ranking_update') {
       showBattleRanking(msg.ranking, true);
+    } else if (msg.type === 'exam_ranking') {
+      showExamRankingHost(msg.ranking, false);
+    } else if (msg.type === 'exam_ranking_update') {
+      showExamRankingHost(msg.ranking, true);
     }
   };
 }
@@ -737,4 +744,180 @@ renderChoicesGrid();
 function endSession() {
   if (!confirm('Terminer la session ?')) return;
   location.reload();
+}
+
+
+// ================= EXAMEN BLANC (host) =================
+let examHostCfg = { test: 'a', minutes: 45, diff: 'normal' };
+let examSessionCode = null;
+
+function openExamPicker() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('exam-screen').style.display = 'flex';
+  document.getElementById('exam-screen').style.flexDirection = 'column';
+  updateExamHostSummary();
+}
+function closeExamPicker() {
+  document.getElementById('exam-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+  document.getElementById('setup-screen').style.flexDirection = 'column';
+}
+
+function selectExamHostTest(letter) {
+  examHostCfg.test = letter;
+  document.querySelectorAll('#exam-host-test-grid .exam-host-chip').forEach(c =>
+    c.classList.toggle('selected-chip', c.dataset.test === letter));
+  updateExamHostSummary();
+}
+function selectExamHostFormat(min) {
+  examHostCfg.minutes = min;
+  [10, 20, 45].forEach(m =>
+    document.getElementById(`exam-host-fmt-${m}`).classList.toggle('selected-type', m === min));
+  updateExamHostSummary();
+}
+function selectExamHostDiff(diff) {
+  examHostCfg.diff = diff;
+  document.getElementById('exam-host-diff-normal').classList.toggle('selected-type', diff === 'normal');
+  document.getElementById('exam-host-diff-hard').classList.toggle('selected-type', diff === 'hard');
+  const mult = diff === 'hard' ? 2 : 1;
+  document.getElementById('exam-host-fmt-10-q').textContent = `${10 * mult} q`;
+  document.getElementById('exam-host-fmt-20-q').textContent = `${20 * mult} q`;
+  document.getElementById('exam-host-fmt-45-q').textContent = `${50 * mult} q`;
+  updateExamHostSummary();
+}
+function examHostCount() {
+  const base = { 10: 10, 20: 20, 45: 50 }[examHostCfg.minutes];
+  return examHostCfg.diff === 'hard' ? base * 2 : base;
+}
+function updateExamHostSummary() {
+  const n = examHostCount();
+  const label = (examHostCfg.diff === 'hard' && examHostCfg.minutes === 45)
+    ? `Examen ${examHostCfg.test.toUpperCase()} + 1 autre`
+    : `Examen ${examHostCfg.test.toUpperCase()}`;
+  const diffTxt = examHostCfg.diff === 'hard' ? ' · 🔥 difficile' : '';
+  document.getElementById('exam-host-summary').textContent =
+    `${label} · ${n} questions · ${examHostCfg.minutes} min${diffTxt}`;
+}
+
+async function buildExamHostPool() {
+  const letters6 = ['a','b','c','d','e','f'];
+  const chosen = examHostCfg.test;
+  const n = examHostCount();
+  let cats = [`exam-blanc-${chosen}`];
+  let label = `Examen ${chosen.toUpperCase()}`;
+  if (examHostCfg.diff === 'hard' && examHostCfg.minutes === 45) {
+    const others = letters6.filter(l => l !== chosen);
+    const second = others[Math.floor(Math.random() * others.length)];
+    cats.push(`exam-blanc-${second}`);
+    label = `Examens ${chosen.toUpperCase()} + ${second.toUpperCase()}`;
+  }
+  const results = await Promise.all(
+    cats.map(c => fetch(`${API}/bank/questions?category=${encodeURIComponent(c)}`).then(r => r.json()))
+  );
+  let pool = results.flat();
+  const seen = new Set();
+  pool = pool.filter(q => { if (seen.has(q.id)) return false; seen.add(q.id); return true; });
+  const isFull = (examHostCfg.minutes === 45 && examHostCfg.diff === 'normal');
+  if (!isFull) { shuffleArray(pool); pool = pool.slice(0, n); }
+  return { pool, label };
+}
+
+async function launchExam() {
+  const btn = document.getElementById('btn-launch-exam');
+  btn.textContent = 'Création…'; btn.disabled = true;
+
+  const { pool, label } = await buildExamHostPool();
+  if (pool.length === 0) {
+    alert('Aucune question disponible.');
+    btn.textContent = 'Créer la session →'; btn.disabled = false; return;
+  }
+
+  // 1. Session mode exam
+  const sRes = await fetch(`${API}/sessions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'exam' })
+  });
+  const sData = await sRes.json();
+  examSessionCode = sData.code;
+  sessionCode = sData.code;
+
+  // 2. Setup
+  const timeLimitSec = examHostCfg.minutes * 60;
+  await fetch(`${API}/sessions/${examSessionCode}/exam/setup`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      time_limit_seconds: timeLimitSec,
+      label: label,
+      questions: pool.map((q, i) => ({
+        order_index: i,
+        num_choices: q.num_choices,
+        correct_choices: q.correct_choices,
+        bank_question_id: q.id,
+        question_text: q.text,
+        choices_text: q.choices_text,
+        category: q.category,
+        explanation: q.explanation,
+      })),
+    })
+  });
+
+  // 3. Salle d'attente host + QR
+  document.getElementById('nav-code').textContent = examSessionCode;
+  document.getElementById('exam-screen').style.display = 'none';
+  document.getElementById('exam-waiting').style.display = 'flex';
+  document.getElementById('exam-waiting').style.flexDirection = 'column';
+  document.getElementById('qr-panel').style.display = 'block';
+  document.getElementById('btn-end').style.display = 'block';
+
+  const joinUrl = `${window.location.origin}/student.html?session=${examSessionCode}`;
+  document.getElementById('sidebar-code').textContent = examSessionCode;
+  document.getElementById('join-url-text').textContent = joinUrl;
+  const img = document.createElement('img');
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}&bgcolor=1a1a24&color=e8e8f0`;
+  img.style.borderRadius = '8px'; img.width = 180; img.height = 180;
+  document.getElementById('qr-canvas').replaceWith(img);
+
+  document.getElementById('exam-q-count').textContent = pool.length;
+  document.getElementById('exam-timer-display').textContent = `${examHostCfg.minutes} min`;
+
+  connectWS();
+  btn.textContent = 'Créer la session →'; btn.disabled = false;
+}
+
+async function startExam() {
+  const btn = document.getElementById('btn-start-exam-host');
+  btn.textContent = 'Lancement…'; btn.disabled = true;
+  await fetch(`${API}/sessions/${examSessionCode}/exam/start`, { method: 'POST' });
+  btn.textContent = '✓ Examen lancé !';
+  document.getElementById('exam-ranking-waiting').style.display = 'block';
+}
+
+async function forceExamRanking() {
+  await fetch(`${API}/sessions/${examSessionCode}/exam/ranking`, { method: 'POST' });
+}
+
+function showExamRankingHost(ranking, isLive) {
+  const medals = ['🥇','🥈','🥉'];
+  const classes = ['gold','silver','bronze'];
+  const table = document.getElementById('exam-ranking-table');
+  table.innerHTML = '';
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  ranking.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.className = `ranking-row ${classes[i] || ''}`;
+    const elapsed = Math.round(entry.elapsed_seconds);
+    const min = Math.floor(elapsed / 60), sec = elapsed % 60;
+    const timeStr = min > 0 ? `${min}m${sec.toString().padStart(2,'0')}s` : `${sec}s`;
+    const badge = entry.passed ? '✅' : '❌';
+    row.innerHTML =
+      `<span class="ranking-pos">${medals[i] || '#' + (i + 1)}</span>` +
+      `<span class="ranking-name">${esc(entry.display_name)} ${badge}</span>` +
+      `<span class="ranking-score">${entry.score}/1000</span>` +
+      `<span class="ranking-time">${timeStr}</span>`;
+    table.appendChild(row);
+  });
+  document.getElementById('exam-ranking-waiting').style.display = 'none';
+  document.getElementById('exam-ranking-section').style.display = 'block';
+  const titleEl = document.getElementById('exam-ranking-title');
+  if (titleEl) titleEl.textContent = isLive ? 'CLASSEMENT EN COURS…' : 'CLASSEMENT FINAL';
 }

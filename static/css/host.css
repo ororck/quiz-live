@@ -489,3 +489,22 @@ to { opacity: 1; transform: none; }
 .participant-avatar svg { width: 20px; height: 20px; }
 .participant-item { animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ===== EXAMEN BLANC (host) ===== */
+.btn-exam { background: var(--accent); color: #fff; font-weight: 700; }
+.btn-exam:hover { opacity: 0.88; }
+
+#exam-screen { display: none; flex-direction: column; gap: 8px; }
+#exam-waiting { display: none; flex-direction: column; gap: 20px; }
+
+.exam-host-chip {
+  padding: 12px 0; text-align: center; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  font-family: var(--mono); font-size: 1rem; font-weight: 700;
+  color: var(--text); cursor: pointer; transition: all 0.15s;
+}
+.exam-host-chip:hover { border-color: var(--accent); }
+.exam-host-chip.selected-chip { border-color: var(--accent); background: rgba(124,106,255,0.15); color: var(--accent); }
+
+#exam-screen .type-btn small { color: var(--muted); font-size: 0.7rem; }
+#exam-screen .type-btn.selected-type small { color: var(--accent); }
