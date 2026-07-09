@@ -20,6 +20,7 @@ class QuestionBank(Base):
     correct_choices: Mapped[list] = mapped_column(JSON)      # ex: [0, 2]
     time_limit_seconds: Mapped[int | None] = mapped_column(default=None)
     category: Mapped[str | None] = mapped_column(default=None)  # tag : "az-900", "az-104", etc.
+    explanation: Mapped[str | None] = mapped_column(default=None)  # corrigé (examens blancs)
 
 
 class Flashcard(Base):

@@ -236,6 +236,26 @@ function addBattleWaitingPlayer(name) {
   list.appendChild(el);
 }
 
+function addExamWaitingPlayer(name) {
+  if (examWaitingPlayers.includes(name)) return;
+  examWaitingPlayers.push(name);
+  document.getElementById('exam-waiting-count').textContent = examWaitingPlayers.length;
+  const list = document.getElementById('exam-waiting-players');
+  const empty = list.querySelector('.wr-empty');
+  if (empty) empty.remove();
+  const el = document.createElement('div');
+  el.className = 'wr-player';
+  const av = document.createElement('div');
+  av.className = 'wr-avatar';
+  av.innerHTML = robotSVG(name);
+  const label = document.createElement('span');
+  label.className = 'wr-name';
+  label.textContent = name;
+  el.appendChild(av);
+  el.appendChild(label);
+  list.appendChild(el);
+}
+
 async function hostStartBattle() {
   const btn = document.getElementById('btn-host-start-battle');
   btn.textContent = 'Lancement…';
@@ -289,6 +309,17 @@ async function joinSession() {
     // tout de suite, sans attendre un futur message WebSocket qui ne parlera
     // que des PROCHAINES arrivees, pas de celles qui ont eu lieu avant nous.
     (data.existing_players || []).forEach(addBattleWaitingPlayer);
+    connectWS();
+  } else if (sessionData.mode === 'exam') {
+    // --- Mode Examen blanc multijoueur : salle d'attente candidat ---
+    mode = 'exam';
+    examIsMulti = true;
+    document.getElementById('exam-waiting-code').textContent = code;
+    examWaitingPlayers = [];
+    document.getElementById('exam-waiting-count').textContent = '0';
+    document.getElementById('exam-waiting-players').innerHTML = '<div class="wr-empty">En attente…</div>';
+    showScreen('screen-exam-waiting');
+    (data.existing_players || []).forEach(addExamWaitingPlayer);
     connectWS();
   } else {
     // --- Mode Live classique ---
@@ -355,6 +386,9 @@ function getSelectedCategories() {
   chips.forEach(chip => {
     const chipCats = JSON.parse(chip.dataset.cats);
     chipCats.forEach(c => {
+      // Examen blanc : questions non taguees mcq/scenario -> toujours incluses,
+      // le filtre type ne s'applique pas a elles. Seul le nombre compte.
+      if (c.startsWith('exam-blanc')) { cats.push(c); return; }
       if (soloQuestionType === 'all') cats.push(c);
       else if (soloQuestionType === 'mcq' && (c.endsWith('-mcq') || c === 'az-900')) cats.push(c);
       else if (soloQuestionType === 'scenario' && c.endsWith('-scenario')) cats.push(c);
@@ -484,6 +518,8 @@ async function loadSoloQuestion() {
 let wsShouldReconnect = true;   // passe à false quand la session est finie
 let wsReconnectDelay = 1000;    // backoff léger, plafonné
 let battleAlreadyStarted = false; // évite qu'un replay battle_start ne remette à zéro
+let examAlreadyStarted = false;   // idem pour l'examen
+let examWaitingPlayers = [];      // salle d'attente examen multijoueur
 
 function connectWS() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -505,6 +541,10 @@ function connectWS() {
       // Un joueur qui a REJOINT (pas le créateur) voit aussi la liste s'animer
       if (!isBattleHost && document.getElementById('screen-battle-waiting').classList.contains('active')) {
         addBattleWaitingPlayer(msg.display_name || 'Anonyme');
+      }
+      // Salle d'attente examen multijoueur
+      if (document.getElementById('screen-exam-waiting').classList.contains('active')) {
+        addExamWaitingPlayer(msg.display_name || 'Anonyme');
       }
 
     } else if (msg.type === 'question_start') {
@@ -540,6 +580,15 @@ function connectWS() {
       showBattleRanking(msg.ranking, false);
     } else if (msg.type === 'battle_ranking_update') {
       showBattleRanking(msg.ranking, true);
+
+    } else if (msg.type === 'exam_start') {
+      if (examAlreadyStarted) return;   // garde-fou reconnexion (comme battle)
+      examAlreadyStarted = true;
+      startExamGame(msg);
+    } else if (msg.type === 'exam_ranking') {
+      showExamRanking(msg.ranking, false);
+    } else if (msg.type === 'exam_ranking_update') {
+      showExamRanking(msg.ranking, true);
     }
   };
 
@@ -1618,3 +1667,478 @@ const CS_TIPS = [
     }, remaining);
   });
 })();
+
+
+// ================= EXAMEN BLANC =================
+// Reutilise le moteur serveur "exam" (calque sur Battle, en memoire).
+// Specificite front : navigation semi-libre, reponses stockees en LOCAL et
+// soumises seulement a la validation finale, chrono serveur, score /1000.
+
+let examConfig = { test: 'a', minutes: 45, diff: 'normal' };
+let examQuestions = [];        // set recu du serveur (ordre fige)
+let examIndex = 0;             // question affichee
+let examMaxReached = 0;        // question la plus avancee atteinte (nav semi-libre)
+let examAnswers = {};          // index -> [choix] (reponses locales, non soumises)
+let examFlags = {};            // index -> true si marquee pour revision
+let examStartedAt = null;      // Date de debut (serveur)
+let examTimeLimitSec = null;
+let examTimerInterval = null;
+let examTimeUp = false;
+let examSubmitted = false;     // garde-fou : ne finir qu'une fois
+let examLabel = '';
+let examIsMulti = false;       // true si session host multijoueur
+
+// Nombre de questions selon format + difficulte
+function examQuestionCount() {
+  const base = { 10: 10, 20: 20, 45: 50 }[examConfig.minutes];
+  return examConfig.diff === 'hard' ? base * 2 : base;
+}
+
+function showExamSetup() {
+  updateExamSummary();
+  showScreen('screen-exam-setup');
+}
+
+function selectExamTest(letter) {
+  examConfig.test = letter;
+  document.querySelectorAll('#exam-test-grid .exam-test-chip').forEach(c => {
+    c.classList.toggle('selected-chip', c.dataset.test === letter);
+  });
+  updateExamSummary();
+}
+
+function selectExamFormat(min) {
+  examConfig.minutes = min;
+  [10, 20, 45].forEach(m => {
+    document.getElementById(`exam-fmt-${m}`).classList.toggle('selected-theme', m === min);
+  });
+  updateExamSummary();
+}
+
+function selectExamDiff(diff) {
+  examConfig.diff = diff;
+  document.getElementById('exam-diff-normal').classList.toggle('selected-theme', diff === 'normal');
+  document.getElementById('exam-diff-hard').classList.toggle('selected-theme', diff === 'hard');
+  // Rafraichir le nombre affiche sous chaque format
+  const mult = diff === 'hard' ? 2 : 1;
+  document.getElementById('exam-fmt-10-q').textContent = `${10 * mult} questions`;
+  document.getElementById('exam-fmt-20-q').textContent = `${20 * mult} questions`;
+  document.getElementById('exam-fmt-45-q').textContent = `${50 * mult} questions`;
+  updateExamSummary();
+}
+
+function updateExamSummary() {
+  const n = examQuestionCount();
+  const testLabel = examConfig.diff === 'hard' && examConfig.minutes === 45
+    ? `Examen ${examConfig.test.toUpperCase()} + 1 autre`
+    : `Examen ${examConfig.test.toUpperCase()}`;
+  const diffTxt = examConfig.diff === 'hard' ? ' · 🔥 difficile' : '';
+  document.getElementById('exam-summary').textContent =
+    `${testLabel} · ${n} questions · ${examConfig.minutes} min${diffTxt}`;
+}
+
+// Melange (Fisher-Yates), reutilise la logique existante shuffle()
+function examShuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Construit le pool de questions selon test + format + difficulte
+async function buildExamPool() {
+  const letters6 = ['a','b','c','d','e','f'];
+  const chosen = examConfig.test;
+  const n = examQuestionCount();
+
+  // Difficile 45 min : test choisi + un autre tire au hasard
+  let cats = [`exam-blanc-${chosen}`];
+  if (examConfig.diff === 'hard' && examConfig.minutes === 45) {
+    const others = letters6.filter(l => l !== chosen);
+    const second = others[Math.floor(Math.random() * others.length)];
+    cats.push(`exam-blanc-${second}`);
+    examLabel = `Examens ${chosen.toUpperCase()} + ${second.toUpperCase()}`;
+  } else {
+    examLabel = `Examen ${chosen.toUpperCase()}`;
+  }
+
+  // Charger les catégories, dédoublonner par id
+  const results = await Promise.all(
+    cats.map(c => fetch(`${API}/bank/questions?category=${encodeURIComponent(c)}`).then(r => r.json()))
+  );
+  let pool = results.flat();
+  const seen = new Set();
+  pool = pool.filter(q => { if (seen.has(q.id)) return false; seen.add(q.id); return true; });
+
+  // Test complet normal (45 min, 50q) : on garde tout le test dans l'ordre.
+  // Sinon : N tirees au hasard.
+  const isFullTest = (examConfig.minutes === 45 && examConfig.diff === 'normal');
+  if (!isFullTest) {
+    pool = examShuffle(pool).slice(0, n);
+  }
+  return pool;
+}
+
+// Lance un examen SOLO : cree une session mode exam, setup, start immediat
+async function startSoloExam() {
+  const name = document.getElementById('exam-name-input').value.trim();
+  if (!name) { alert('Prénom requis.'); return; }
+
+  const btn = document.getElementById('btn-start-exam');
+  btn.disabled = true; btn.textContent = 'Préparation…';
+
+  try {
+    const pool = await buildExamPool();
+    if (pool.length === 0) { alert('Aucune question disponible.'); btn.disabled = false; btn.textContent = 'Commencer l\'examen →'; return; }
+
+    // 1. Creer la session exam
+    const sRes = await fetch(`${API}/sessions`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'exam' })
+    });
+    const sData = await sRes.json();
+    sessionCode = sData.code;
+
+    // 2. Rejoindre (identite du candidat)
+    const jRes = await fetch(`${API}/sessions/${sessionCode}/join`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: name })
+    });
+    const jData = await jRes.json();
+    participantId = jData.id;
+    battleDisplayName = name;
+
+    // 3. Setup du set
+    const timeLimitSec = examConfig.minutes * 60;
+    await fetch(`${API}/sessions/${sessionCode}/exam/setup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        time_limit_seconds: timeLimitSec,
+        label: examLabel,
+        questions: pool.map((q, i) => ({
+          order_index: i,
+          num_choices: q.num_choices,
+          correct_choices: q.correct_choices,
+          bank_question_id: q.id,
+          question_text: q.text,
+          choices_text: q.choices_text,
+          category: q.category,
+          explanation: q.explanation,
+        })),
+      })
+    });
+
+    // 4. Connexion WS (pour rejeu au refresh) puis start
+    mode = 'exam';
+    examIsMulti = false;
+    connectWS();
+    await fetch(`${API}/sessions/${sessionCode}/exam/start`, { method: 'POST' });
+    // Le serveur diffuse exam_start ; on l'attrape dans connectWS.onmessage.
+  } catch (e) {
+    alert('Erreur au démarrage de l\'examen.');
+    btn.disabled = false; btn.textContent = 'Commencer l\'examen →';
+  }
+}
+
+// Demarre le jeu examen a la reception de exam_start
+function startExamGame(msg) {
+  examQuestions = msg.questions;
+  examIndex = 0;
+  examMaxReached = 0;
+  examAnswers = {};
+  examFlags = {};
+  examSubmitted = false;
+  examTimeUp = false;
+  examTimeLimitSec = msg.time_limit_seconds || null;
+  examStartedAt = new Date(msg.started_at);
+  examLabel = msg.label || 'Examen';
+
+  if (examTimeLimitSec) startExamTimer();
+  loadExamQuestion();
+  showScreen('screen-exam-question');
+}
+
+function loadExamQuestion() {
+  const q = examQuestions[examIndex];
+  const n = examQuestions.length;
+  if (examIndex > examMaxReached) examMaxReached = examIndex;
+
+  document.getElementById('exam-counter').textContent = `Question ${examIndex + 1} / ${n}`;
+  const answeredCount = Object.keys(examAnswers).length;
+  document.getElementById('exam-answered-count').textContent = `${answeredCount} répondue(s)`;
+  const pct = Math.round((answeredCount / n) * 100);
+  document.getElementById('exam-progress-bar').style.width = pct + '%';
+
+  document.getElementById('exam-q-text').innerHTML = renderText(q.question_text || '');
+  document.getElementById('exam-flag-check').checked = !!examFlags[examIndex];
+
+  const numCorrect = q.correct_choices.length;
+  document.getElementById('exam-q-hint').textContent = numCorrect > 1
+    ? 'Plusieurs bonnes réponses' : 'Sélectionne ta réponse';
+
+  const grid = document.getElementById('exam-choices-grid');
+  grid.innerHTML = '';
+  const selected = examAnswers[examIndex] || [];
+
+  for (let i = 0; i < q.num_choices; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.dataset.index = i;
+    btn.textContent = q.choices_text ? q.choices_text[i] : letters[i];
+    if (q.choices_text) {
+      btn.style.fontSize = '0.9rem';
+      btn.style.aspectRatio = 'auto';
+      btn.style.padding = '16px';
+      btn.style.textAlign = 'left';
+      btn.style.justifyContent = 'flex-start';
+    }
+    if (selected.includes(i)) btn.classList.add('selected');
+    btn.onclick = () => examToggleChoice(i, btn);
+    grid.appendChild(btn);
+  }
+
+  updateExamNavButtons();
+}
+
+// Navigation semi-libre : avancer seulement jusqu'a maxReached+1,
+// sauf si tout est repondu -> navigation totale.
+function allExamAnswered() {
+  return Object.keys(examAnswers).length >= examQuestions.length;
+}
+
+function updateExamNavButtons() {
+  const prev = document.getElementById('exam-prev-btn');
+  const next = document.getElementById('exam-next-btn');
+  const review = document.getElementById('exam-review-btn');
+  const n = examQuestions.length;
+
+  prev.style.visibility = examIndex > 0 ? 'visible' : 'hidden';
+
+  const complete = allExamAnswered();
+  // Bouton review visible seulement quand tout est repondu
+  review.style.display = complete ? 'inline-block' : 'none';
+
+  if (examIndex >= n - 1) {
+    // Derniere question
+    next.style.display = complete ? 'none' : 'inline-block';
+    next.textContent = 'Suivant →';
+    next.disabled = examIndex >= examMaxReached && !complete;
+  } else {
+    next.style.display = 'inline-block';
+    next.textContent = 'Suivant →';
+    // Avancer autorise si deja atteint OU tout repondu
+    next.disabled = (examIndex >= examMaxReached) && !complete && !(examIndex in examAnswers);
+  }
+}
+
+function examToggleChoice(i, btn) {
+  const q = examQuestions[examIndex];
+  const numCorrect = q.correct_choices.length;
+  let cur = examAnswers[examIndex] ? examAnswers[examIndex].slice() : [];
+
+  if (numCorrect === 1) {
+    // Choix unique : remplace
+    cur = [i];
+    document.querySelectorAll('#exam-choices-grid .choice-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  } else {
+    // Multi : toggle
+    if (cur.includes(i)) { cur = cur.filter(x => x !== i); btn.classList.remove('selected'); }
+    else { cur.push(i); btn.classList.add('selected'); }
+  }
+  examAnswers[examIndex] = cur.sort();
+  // Rafraichir compteur + nav (repondre peut debloquer l'avance)
+  const answeredCount = Object.keys(examAnswers).length;
+  document.getElementById('exam-answered-count').textContent = `${answeredCount} répondue(s)`;
+  document.getElementById('exam-progress-bar').style.width =
+    Math.round((answeredCount / examQuestions.length) * 100) + '%';
+  updateExamNavButtons();
+}
+
+function toggleExamFlag() {
+  examFlags[examIndex] = document.getElementById('exam-flag-check').checked;
+}
+
+function examPrev() {
+  if (examIndex > 0) { examIndex--; loadExamQuestion(); }
+}
+
+function examNext() {
+  const n = examQuestions.length;
+  if (examIndex < n - 1) {
+    // avance autorisee jusqu'a maxReached+1, ou libre si tout repondu
+    if (examIndex < examMaxReached || (examIndex in examAnswers) || allExamAnswered()) {
+      examIndex++;
+      loadExamQuestion();
+    }
+  } else if (allExamAnswered()) {
+    showExamReview();
+  }
+}
+
+// ----- Ecran review -----
+function showExamReview() {
+  const grid = document.getElementById('exam-review-grid');
+  grid.innerHTML = '';
+  examQuestions.forEach((q, i) => {
+    const cell = document.createElement('div');
+    const answered = i in examAnswers && examAnswers[i].length > 0;
+    let cls = answered ? 'answered' : 'empty';
+    if (examFlags[i]) cls = 'flagged';
+    cell.className = `exam-review-cell ${cls}`;
+    cell.textContent = (i + 1) + (examFlags[i] ? ' 🚩' : '');
+    cell.onclick = () => { examIndex = i; loadExamQuestion(); showScreen('screen-exam-question'); };
+    grid.appendChild(cell);
+  });
+  showScreen('screen-exam-review');
+}
+
+function examBackToQuestions() {
+  loadExamQuestion();
+  showScreen('screen-exam-question');
+}
+
+function confirmExamFinish() {
+  const empty = examQuestions.length - Object.keys(examAnswers).filter(k => examAnswers[k].length > 0).length;
+  const msg = empty > 0
+    ? `Il reste ${empty} question(s) sans réponse. Terminer quand même ?`
+    : 'Terminer l\'examen et voir ton score ?';
+  if (confirm(msg)) finishExam();
+}
+
+// ----- Chrono serveur -----
+function startExamTimer() {
+  const el = document.getElementById('exam-timer');
+  const elR = document.getElementById('exam-review-timer');
+  const tick = () => {
+    const elapsed = (Date.now() - examStartedAt.getTime()) / 1000;
+    const remaining = Math.max(0, examTimeLimitSec - elapsed);
+    const m = Math.floor(remaining / 60);
+    const s = Math.floor(remaining % 60);
+    const txt = `${m}:${s.toString().padStart(2, '0')}`;
+    el.textContent = txt; if (elR) elR.textContent = txt;
+    if (remaining <= 60) { el.classList.add('urgent'); if (elR) elR.classList.add('urgent'); }
+    if (remaining <= 0) {
+      clearInterval(examTimerInterval);
+      examTimeUp = true;
+      finishExam();   // temps ecoule : soumission forcee
+    }
+  };
+  tick();
+  examTimerInterval = setInterval(tick, 1000);
+}
+
+// ----- Soumission finale : envoyer toutes les reponses puis /exam/finish -----
+async function finishExam() {
+  if (examSubmitted) return;
+  examSubmitted = true;
+  clearInterval(examTimerInterval);
+
+  // Soumettre chaque reponse locale au serveur (questions deja actives)
+  const posts = [];
+  for (let i = 0; i < examQuestions.length; i++) {
+    const q = examQuestions[i];
+    const sel = examAnswers[i] && examAnswers[i].length > 0 ? examAnswers[i] : [-1];
+    posts.push(fetch(`${API}/sessions/${sessionCode}/questions/${q.question_id}/answer`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participant_id: participantId, selected_choices: sel })
+    }));
+  }
+  await Promise.all(posts);
+
+  // Finaliser -> score /1000 + breakdown
+  const res = await fetch(`${API}/sessions/${sessionCode}/exam/finish`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ participant_id: participantId })
+  });
+  const result = await res.json();
+  renderExamScore(result);
+}
+
+function renderExamScore(result) {
+  // Verdict + score
+  const verdict = document.getElementById('exam-verdict');
+  verdict.textContent = result.passed ? '✅ RÉUSSI' : '❌ ÉCHOUÉ';
+  verdict.className = 'exam-verdict ' + (result.passed ? 'pass' : 'fail');
+  document.getElementById('exam-score-big').textContent = result.score;
+  document.getElementById('exam-score-big').className = 'exam-score-big ' + (result.passed ? 'pass' : 'fail');
+
+  const elapsed = Math.round(result.elapsed_seconds);
+  const m = Math.floor(elapsed / 60), s = elapsed % 60;
+  document.getElementById('exam-score-sub').textContent =
+    `${result.correct} / ${result.total} bonnes réponses · seuil 700 · temps ${m}m${s.toString().padStart(2,'0')}s`;
+
+  // Breakdown par examen
+  const bd = document.getElementById('exam-breakdown-bars');
+  bd.innerHTML = '';
+  Object.entries(result.breakdown).forEach(([cat, v]) => {
+    const pct = v.total ? Math.round(v.good / v.total * 100) : 0;
+    const label = cat.replace('exam-blanc-', 'Examen ').toUpperCase();
+    const row = document.createElement('div');
+    row.className = 'exam-bd-row';
+    row.innerHTML =
+      `<div class="exam-bd-head"><span>${label}</span><span>${v.good}/${v.total}</span></div>` +
+      `<div class="exam-bd-track"><div class="exam-bd-fill" style="width:${pct}%"></div></div>`;
+    bd.appendChild(row);
+  });
+
+  // Questions ratees + explication
+  const wrongList = document.getElementById('exam-wrong-list');
+  wrongList.innerHTML = '';
+  let wrongCount = 0;
+  examQuestions.forEach((q, i) => {
+    const sel = examAnswers[i] || [];
+    const correct = q.correct_choices;
+    const isCorrect = sel.length === correct.length && sel.every(x => correct.includes(x));
+    if (isCorrect) return;
+    wrongCount++;
+    const good = correct.map(idx => q.choices_text ? q.choices_text[idx] : letters[idx]).join(', ');
+    const item = document.createElement('div');
+    item.className = 'exam-wrong-item';
+    let html = `<div class="exam-wrong-q">${renderText(q.question_text || '')}</div>` +
+               `<div class="exam-wrong-good">✓ ${escapeHtml(good)}</div>`;
+    if (q.explanation) html += `<div class="exam-wrong-expl">${escapeHtml(q.explanation)}</div>`;
+    item.innerHTML = html;
+    wrongList.appendChild(item);
+  });
+  if (wrongCount === 0) {
+    document.getElementById('exam-wrong-section').style.display = 'none';
+  }
+
+  // Multijoueur : montrer l'attente du classement
+  if (examIsMulti && !result.all_finished) {
+    document.getElementById('exam-waiting-ranking').style.display = 'flex';
+    document.getElementById('exam-replay-btn').style.display = 'none';
+  }
+
+  showScreen('screen-exam-score');
+}
+
+// ----- Classement multijoueur -----
+function showExamRanking(ranking, isLive) {
+  if (!isLive) { wsShouldReconnect = false; clearInterval(examTimerInterval); }
+  const medals = ['🥇','🥈','🥉'];
+  const classes = ['gold','silver','bronze'];
+  const table = document.getElementById('exam-ranking-table');
+  table.innerHTML = '';
+  ranking.forEach((entry, i) => {
+    const row = document.createElement('div');
+    const isMe = entry.display_name === battleDisplayName;
+    row.className = `ranking-row ${classes[i] || ''} ${isMe ? 'ranking-me' : ''}`;
+    const elapsed = Math.round(entry.elapsed_seconds);
+    const m = Math.floor(elapsed / 60), s = elapsed % 60;
+    const timeStr = m > 0 ? `${m}m${s.toString().padStart(2,'0')}s` : `${s}s`;
+    const badge = entry.passed ? '✅' : '❌';
+    row.innerHTML =
+      `<span class="ranking-pos">${medals[i] || '#' + (i + 1)}</span>` +
+      `<span class="ranking-name">${escapeHtml(entry.display_name)}${isMe ? ' 👤' : ''} ${badge}</span>` +
+      `<span class="ranking-score">${entry.score}/1000</span>` +
+      `<span class="ranking-time">${timeStr}</span>`;
+    table.appendChild(row);
+  });
+  const titleEl = document.getElementById('exam-ranking-title');
+  if (titleEl) titleEl.textContent = isLive ? '📝 CLASSEMENT EN COURS…' : '📝 CLASSEMENT FINAL';
+  if (!isLive) showScreen('screen-exam-ranking');
+}

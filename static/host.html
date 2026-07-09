@@ -26,6 +26,7 @@
       <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="openBankPicker()">Préparer un quiz en groupe 📚</button>
         <button class="btn btn-battle" onclick="openBattlePicker()">⚔️ Mode Battle</button>
+        <button class="btn btn-exam" onclick="openExamPicker()">📝 Examen blanc</button>
       </div>
     </div>
 
@@ -138,6 +139,69 @@
       <div id="battle-ranking-waiting" style="color:var(--muted);font-size:0.85rem;margin-top:8px;">
         Le classement apparaîtra ici quand tous les joueurs auront terminé.
         <br><button class="btn btn-ghost btn-sm" onclick="forceRanking()" style="margin-top:10px;">Clôturer la battle</button>
+      </div>
+    </div>
+
+    <!-- EXAM PICKER (host) -->
+    <div id="exam-screen" class="panel" style="display:none;">
+      <div class="panel-title">📝 EXAMEN BLANC EN GROUPE</div>
+      <p style="color:var(--muted);font-size:0.9rem;line-height:1.6;margin-bottom:16px;">Tous les candidats passent le même examen en même temps. Chrono synchronisé, classement final par score puis par temps.</p>
+
+      <label style="font-size:0.8rem;color:var(--muted);">Quel examen ?</label>
+      <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0 16px;" id="exam-host-test-grid">
+        <div class="exam-host-chip selected-chip" data-test="a" onclick="selectExamHostTest('a')">A</div>
+        <div class="exam-host-chip" data-test="b" onclick="selectExamHostTest('b')">B</div>
+        <div class="exam-host-chip" data-test="c" onclick="selectExamHostTest('c')">C</div>
+        <div class="exam-host-chip" data-test="d" onclick="selectExamHostTest('d')">D</div>
+        <div class="exam-host-chip" data-test="e" onclick="selectExamHostTest('e')">E</div>
+        <div class="exam-host-chip" data-test="f" onclick="selectExamHostTest('f')">F</div>
+      </div>
+
+      <label style="font-size:0.8rem;color:var(--muted);">Format</label>
+      <div style="display:flex;gap:8px;margin:8px 0 16px;">
+        <div class="type-btn" id="exam-host-fmt-10" onclick="selectExamHostFormat(10)">10 min<br><small id="exam-host-fmt-10-q">10 q</small></div>
+        <div class="type-btn" id="exam-host-fmt-20" onclick="selectExamHostFormat(20)">20 min<br><small id="exam-host-fmt-20-q">20 q</small></div>
+        <div class="type-btn selected-type" id="exam-host-fmt-45" onclick="selectExamHostFormat(45)">45 min<br><small id="exam-host-fmt-45-q">50 q</small></div>
+      </div>
+
+      <label style="font-size:0.8rem;color:var(--muted);">Difficulté</label>
+      <div style="display:flex;gap:8px;margin:8px 0 16px;">
+        <div class="type-btn selected-type" id="exam-host-diff-normal" onclick="selectExamHostDiff('normal')">Normal</div>
+        <div class="type-btn" id="exam-host-diff-hard" onclick="selectExamHostDiff('hard')">🔥 Difficile</div>
+      </div>
+
+      <div class="bank-toolbar">
+        <div class="bank-count" id="exam-host-summary">Examen A · 50 questions · 45 min</div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-ghost btn-sm" onclick="closeExamPicker()">Annuler</button>
+          <button class="btn btn-exam" onclick="launchExam()" id="btn-launch-exam">Créer la session →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXAM WAITING (host) -->
+    <div id="exam-waiting" class="panel" style="display:none;">
+      <div class="battle-waiting-header">
+        <div>
+          <div class="exam-badge" style="font-family:var(--mono);font-size:0.7rem;letter-spacing:2px;padding:4px 10px;border-radius:4px;background:rgba(124,106,255,0.12);color:var(--accent);border:1px solid var(--accent);display:inline-block;">📝 EXAMEN</div>
+          <h2 style="margin-top:8px;font-size:1.3rem;">En attente des candidats</h2>
+        </div>
+        <button class="btn btn-exam" onclick="startExam()" id="btn-start-exam-host">Lancer l'examen ▶</button>
+      </div>
+
+      <div class="battle-progress">
+        <span id="exam-joined-count">0</span> candidat(s) · <span id="exam-q-count">0</span> questions · chrono : <span id="exam-timer-display">45 min</span>
+      </div>
+
+      <div id="exam-ranking-section" style="display:none;">
+        <div id="exam-ranking-title" style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;margin-bottom:10px;">CLASSEMENT FINAL</div>
+        <div class="ranking-table" id="exam-ranking-table"></div>
+        <button class="btn btn-primary btn-sm" onclick="location.reload()" style="margin-top:12px;">Relancer une session</button>
+      </div>
+
+      <div id="exam-ranking-waiting" style="color:var(--muted);font-size:0.85rem;margin-top:8px;display:none;">
+        Le classement apparaîtra ici quand tous les candidats auront terminé.
+        <br><button class="btn btn-ghost btn-sm" onclick="forceExamRanking()" style="margin-top:10px;">Clôturer l'examen</button>
       </div>
     </div>
 
