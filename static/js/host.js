@@ -566,6 +566,9 @@ function connectWS() {
       showExamRankingHost(msg.ranking, false);
     } else if (msg.type === 'exam_ranking_update') {
       showExamRankingHost(msg.ranking, true);
+    } else if (msg.type === 'exam_start') {
+      // Le host lance aussi son propre chrono, synchro sur started_at serveur.
+      startExamHostTimer(msg.started_at, msg.time_limit_seconds);
     }
   };
 }
@@ -666,6 +669,13 @@ function showStats(stats) {
   document.getElementById('active-question').style.display = 'none';
   document.getElementById('stats-panel').style.display = 'flex';
   document.getElementById('stats-panel').style.flexDirection = 'column';
+
+  // Énoncé de la question en haut (point 4). Le host a le texte dans currentQuestion.
+  const qEl = document.getElementById('stats-question');
+  if (qEl) {
+    const txt = currentQuestion && (currentQuestion.text || currentQuestion.question_text);
+    qEl.textContent = txt ? `Q${questionIndex}. ${txt}` : `Question #${questionIndex}`;
+  }
 
   document.getElementById('stat-correct').textContent = stats.correct_count;
   document.getElementById('stat-wrong').textContent = stats.total_answers - stats.correct_count;
@@ -890,6 +900,77 @@ async function startExam() {
   await fetch(`${API}/sessions/${examSessionCode}/exam/start`, { method: 'POST' });
   btn.textContent = '✓ Examen lancé !';
   document.getElementById('exam-ranking-waiting').style.display = 'block';
+}
+
+// Chrono host pendant l'examen (point 1), synchro sur l'heure serveur.
+let examHostTimerInterval = null;
+function startExamHostTimer(startedAtIso, timeLimitSec) {
+  if (!timeLimitSec) return;
+  const startedAt = new Date(startedAtIso);
+  const el = document.getElementById('exam-timer-display');
+  clearInterval(examHostTimerInterval);
+  const tick = () => {
+    const elapsed = (Date.now() - startedAt.getTime()) / 1000;
+    const remaining = Math.max(0, timeLimitSec - elapsed);
+    const m = Math.floor(remaining / 60);
+    const s = Math.floor(remaining % 60);
+    el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    el.classList.toggle('exam-timer-urgent', remaining <= 60);
+    if (remaining <= 0) clearInterval(examHostTimerInterval);
+  };
+  tick();
+  examHostTimerInterval = setInterval(tick, 1000);
+}
+
+// Recap host stats par question (point 3), option dépliable.
+let examStatsLoaded = false;
+async function toggleExamStats() {
+  const panel = document.getElementById('exam-stats-panel');
+  const btn = document.getElementById('btn-exam-stats');
+  if (panel.style.display === 'block') {
+    panel.style.display = 'none';
+    btn.textContent = '📊 Voir les stats par question';
+    return;
+  }
+  panel.style.display = 'block';
+  btn.textContent = '📊 Masquer les stats';
+  if (examStatsLoaded) return;   // deja charge, on ne refait pas l'appel
+
+  panel.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;padding:12px 0;">Chargement…</div>';
+  try {
+    const res = await fetch(`${API}/sessions/${examSessionCode}/exam/stats`);
+    const data = await res.json();
+    renderExamStats(data);
+    examStatsLoaded = true;
+  } catch (e) {
+    panel.innerHTML = '<div style="color:var(--red);font-size:0.85rem;">Erreur au chargement des stats.</div>';
+  }
+}
+
+function renderExamStats(data) {
+  const panel = document.getElementById('exam-stats-panel');
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (!data.questions || data.questions.length === 0) {
+    panel.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;">Aucune donnée.</div>';
+    return;
+  }
+  let html = `<div style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;">${data.participant_count} candidat(s) · questions triées de la plus ratée à la mieux réussie</div>`;
+  data.questions.forEach(q => {
+    // Couleur du taux d'erreur : rouge si > 50%, orange si > 25%, vert sinon
+    const cls = q.wrong_pct > 50 ? 'exam-stat-high' : (q.wrong_pct > 25 ? 'exam-stat-mid' : 'exam-stat-low');
+    const goodTxt = q.good_text.length ? q.good_text.map(esc).join(', ') : '';
+    html += `
+      <div class="exam-stat-q">
+        <div class="exam-stat-head">
+          <span class="exam-stat-num">Q${q.order_index + 1}</span>
+          <span class="exam-stat-badge ${cls}">${q.wrong_pct}% faux</span>
+          <span class="exam-stat-ratio">${q.wrong}/${q.total_answers}</span>
+        </div>
+        <div class="exam-stat-text">${esc(q.question_text || '')}</div>
+        <div class="exam-stat-good">✓ ${goodTxt}</div>
+      </div>`;
+  });
+  panel.innerHTML = html;
 }
 
 async function forceExamRanking() {

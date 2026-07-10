@@ -2095,10 +2095,15 @@ function renderExamScore(result) {
     if (isCorrect) return;
     wrongCount++;
     const good = correct.map(idx => q.choices_text ? q.choices_text[idx] : letters[idx]).join(', ');
+    // Réponse donnée par le joueur (point 2). Peut être vide = sans réponse.
+    const mine = sel.length > 0
+      ? sel.map(idx => q.choices_text ? q.choices_text[idx] : letters[idx]).join(', ')
+      : 'Aucune réponse';
     const item = document.createElement('div');
     item.className = 'exam-wrong-item';
     let html = `<div class="exam-wrong-q">${renderText(q.question_text || '')}</div>` +
-               `<div class="exam-wrong-good">✓ ${escapeHtml(good)}</div>`;
+               `<div class="exam-wrong-mine">✗ Ta réponse : ${escapeHtml(mine)}</div>` +
+               `<div class="exam-wrong-good">✓ Bonne réponse : ${escapeHtml(good)}</div>`;
     if (q.explanation) html += `<div class="exam-wrong-expl">${escapeHtml(q.explanation)}</div>`;
     item.innerHTML = html;
     wrongList.appendChild(item);

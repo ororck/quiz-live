@@ -196,6 +196,8 @@
       <div id="exam-ranking-section" style="display:none;">
         <div id="exam-ranking-title" style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);letter-spacing:2px;margin-bottom:10px;">CLASSEMENT FINAL</div>
         <div class="ranking-table" id="exam-ranking-table"></div>
+        <button class="btn btn-ghost btn-sm" onclick="toggleExamStats()" id="btn-exam-stats" style="margin-top:12px;">📊 Voir les stats par question</button>
+        <div id="exam-stats-panel" style="display:none;margin-top:12px;"></div>
         <button class="btn btn-primary btn-sm" onclick="location.reload()" style="margin-top:12px;">Relancer une session</button>
       </div>
 
@@ -254,6 +256,7 @@
 
       <!-- STATS -->
       <div id="stats-panel">
+        <div id="stats-question" class="stats-question"></div>
         <div class="result-summary">
           <div class="result-chip chip-green">
             <span id="stat-correct">0</span>
