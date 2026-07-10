@@ -771,6 +771,42 @@ async def exam_force_ranking(code: str):
     })
     return ranking
 
+
+@app.get("/sessions/{code}/exam/stats")
+def exam_stats(code: str):
+    """Recap host (point 3) : pour chaque question, taux d'erreur de la promo.
+    Trie les questions de la plus ratee a la moins ratee. En memoire, dispo
+    tant que la session vit."""
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+
+    rows = []
+    for q in sorted(s.questions.values(), key=lambda x: x.order_index):
+        total = len(q.answers)
+        wrong = sum(1 for a in q.answers.values() if not a["is_correct"])
+        correct = total - wrong
+        wrong_pct = round(wrong / total * 100) if total else 0
+        good_letters = q.correct_choices
+        good_text = [
+            (q.choices_text[i] if q.choices_text and i < len(q.choices_text) else str(i))
+            for i in good_letters
+        ]
+        rows.append({
+            "order_index": q.order_index,
+            "question_text": q.question_text,
+            "total_answers": total,
+            "wrong": wrong,
+            "correct": correct,
+            "wrong_pct": wrong_pct,
+            "correct_choices": good_letters,
+            "good_text": good_text,
+            "explanation": q.explanation,
+        })
+    # Question la plus problematique en premier
+    rows.sort(key=lambda r: (-r["wrong_pct"], r["order_index"]))
+    return {"questions": rows, "participant_count": len(s.battle_roster)}
+
 @app.websocket("/ws/{session_code}")
 async def websocket_endpoint(websocket: WebSocket, session_code: str):
     await manager.connect(websocket, session_code)
