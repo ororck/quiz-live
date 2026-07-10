@@ -722,3 +722,6 @@ input[type="text"]:focus { border-color: var(--accent); }
 .exam-wrong-q { font-size: 0.85rem; line-height: 1.5; margin-bottom: 8px; }
 .exam-wrong-good { font-size: 0.8rem; color: var(--green); font-weight: 600; margin-bottom: 6px; }
 .exam-wrong-expl { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+
+/* Point 2 : réponse fausse du joueur dans le récap */
+.exam-wrong-mine { font-size: 0.8rem; color: var(--red); font-weight: 600; margin-bottom: 4px; }
