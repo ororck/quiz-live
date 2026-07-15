@@ -489,3 +489,64 @@ to { opacity: 1; transform: none; }
 .participant-avatar svg { width: 20px; height: 20px; }
 .participant-item { animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ===== EXAMEN BLANC (host) ===== */
+.btn-exam { background: var(--accent); color: #fff; font-weight: 700; }
+.btn-exam:hover { opacity: 0.88; }
+
+#exam-screen { display: none; flex-direction: column; gap: 8px; }
+#exam-waiting { display: none; flex-direction: column; gap: 20px; }
+
+.exam-host-chip {
+  padding: 12px 0; text-align: center; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg);
+  font-family: var(--mono); font-size: 1rem; font-weight: 700;
+  color: var(--text); cursor: pointer; transition: all 0.15s;
+}
+.exam-host-chip:hover { border-color: var(--accent); }
+.exam-host-chip.selected-chip { border-color: var(--accent); background: rgba(124,106,255,0.15); color: var(--accent); }
+
+#exam-screen .type-btn small { color: var(--muted); font-size: 0.7rem; }
+#exam-screen .type-btn.selected-type small { color: var(--accent); }
+
+/* ===== Point 4 : question affichée au-dessus des stats (live) ===== */
+.stats-question {
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--text);
+  padding: 16px 18px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+}
+/* Stats plus compactes sous la question */
+#stats-panel .result-summary { gap: 10px; }
+#stats-panel .result-chip { font-size: 1rem; padding: 6px 14px; }
+#stats-panel .result-chip small { font-size: 0.55rem; }
+#stats-panel .stat-bar-label { font-size: 0.78rem; }
+#stats-panel .stat-bar-track { height: 7px; }
+
+/* Point 1 : chrono host examen urgent */
+#exam-timer-display { font-family: var(--mono); font-weight: 700; }
+.exam-timer-urgent { color: var(--red) !important; }
+
+/* ===== Point 3 : recap host stats par question ===== */
+#exam-stats-panel { display: flex; flex-direction: column; gap: 8px; }
+.exam-stat-q {
+  padding: 12px 14px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.exam-stat-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.exam-stat-num { font-family: var(--mono); font-weight: 700; color: var(--muted); font-size: 0.8rem; }
+.exam-stat-badge {
+  font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px;
+}
+.exam-stat-high { background: rgba(255,92,92,0.15); color: var(--red); }
+.exam-stat-mid { background: rgba(255,159,67,0.15); color: var(--orange); }
+.exam-stat-low { background: rgba(34,217,138,0.15); color: var(--green); }
+.exam-stat-ratio { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-left: auto; }
+.exam-stat-text { font-size: 0.85rem; line-height: 1.5; color: var(--text); margin-bottom: 4px; }
+.exam-stat-good { font-size: 0.75rem; color: var(--green); }

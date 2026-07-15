@@ -552,6 +552,9 @@ function connectWS() {
       addParticipant(msg);
       // Mettre à jour le compteur battle si on est en salle d'attente battle
       document.getElementById('battle-joined-count').textContent = participants.length;
+      // Compteur candidats examen
+      const examJoined = document.getElementById('exam-joined-count');
+      if (examJoined) examJoined.textContent = participants.length;
     } else if (msg.type === 'answer_received') {
       answerCount = msg.total_answers;
       document.getElementById('answer-count-num').textContent = answerCount;
@@ -559,6 +562,13 @@ function connectWS() {
       showBattleRanking(msg.ranking, false);
     } else if (msg.type === 'battle_ranking_update') {
       showBattleRanking(msg.ranking, true);
+    } else if (msg.type === 'exam_ranking') {
+      showExamRankingHost(msg.ranking, false);
+    } else if (msg.type === 'exam_ranking_update') {
+      showExamRankingHost(msg.ranking, true);
+    } else if (msg.type === 'exam_start') {
+      // Le host lance aussi son propre chrono, synchro sur started_at serveur.
+      startExamHostTimer(msg.started_at, msg.time_limit_seconds);
     }
   };
 }
@@ -660,6 +670,13 @@ function showStats(stats) {
   document.getElementById('stats-panel').style.display = 'flex';
   document.getElementById('stats-panel').style.flexDirection = 'column';
 
+  // Énoncé de la question en haut (point 4). Le host a le texte dans currentQuestion.
+  const qEl = document.getElementById('stats-question');
+  if (qEl) {
+    const txt = currentQuestion && (currentQuestion.text || currentQuestion.question_text);
+    qEl.textContent = txt ? `Q${questionIndex}. ${txt}` : `Question #${questionIndex}`;
+  }
+
   document.getElementById('stat-correct').textContent = stats.correct_count;
   document.getElementById('stat-wrong').textContent = stats.total_answers - stats.correct_count;
 
@@ -737,4 +754,251 @@ renderChoicesGrid();
 function endSession() {
   if (!confirm('Terminer la session ?')) return;
   location.reload();
+}
+
+
+// ================= EXAMEN BLANC (host) =================
+let examHostCfg = { test: 'a', minutes: 45, diff: 'normal' };
+let examSessionCode = null;
+
+function openExamPicker() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('exam-screen').style.display = 'flex';
+  document.getElementById('exam-screen').style.flexDirection = 'column';
+  updateExamHostSummary();
+}
+function closeExamPicker() {
+  document.getElementById('exam-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+  document.getElementById('setup-screen').style.flexDirection = 'column';
+}
+
+function selectExamHostTest(letter) {
+  examHostCfg.test = letter;
+  document.querySelectorAll('#exam-host-test-grid .exam-host-chip').forEach(c =>
+    c.classList.toggle('selected-chip', c.dataset.test === letter));
+  updateExamHostSummary();
+}
+function selectExamHostFormat(min) {
+  examHostCfg.minutes = min;
+  [10, 20, 45].forEach(m =>
+    document.getElementById(`exam-host-fmt-${m}`).classList.toggle('selected-type', m === min));
+  updateExamHostSummary();
+}
+function selectExamHostDiff(diff) {
+  examHostCfg.diff = diff;
+  document.getElementById('exam-host-diff-normal').classList.toggle('selected-type', diff === 'normal');
+  document.getElementById('exam-host-diff-hard').classList.toggle('selected-type', diff === 'hard');
+  const mult = diff === 'hard' ? 2 : 1;
+  document.getElementById('exam-host-fmt-10-q').textContent = `${10 * mult} q`;
+  document.getElementById('exam-host-fmt-20-q').textContent = `${20 * mult} q`;
+  document.getElementById('exam-host-fmt-45-q').textContent = `${50 * mult} q`;
+  updateExamHostSummary();
+}
+function examHostCount() {
+  const base = { 10: 10, 20: 20, 45: 50 }[examHostCfg.minutes];
+  return examHostCfg.diff === 'hard' ? base * 2 : base;
+}
+function updateExamHostSummary() {
+  const n = examHostCount();
+  const label = (examHostCfg.diff === 'hard' && examHostCfg.minutes === 45)
+    ? `Examen ${examHostCfg.test.toUpperCase()} + 1 autre`
+    : `Examen ${examHostCfg.test.toUpperCase()}`;
+  const diffTxt = examHostCfg.diff === 'hard' ? ' · 🔥 difficile' : '';
+  document.getElementById('exam-host-summary').textContent =
+    `${label} · ${n} questions · ${examHostCfg.minutes} min${diffTxt}`;
+}
+
+async function buildExamHostPool() {
+  const letters6 = ['a','b','c','d','e','f'];
+  const chosen = examHostCfg.test;
+  const n = examHostCount();
+  let cats = [`exam-blanc-${chosen}`];
+  let label = `Examen ${chosen.toUpperCase()}`;
+  if (examHostCfg.diff === 'hard' && examHostCfg.minutes === 45) {
+    const others = letters6.filter(l => l !== chosen);
+    const second = others[Math.floor(Math.random() * others.length)];
+    cats.push(`exam-blanc-${second}`);
+    label = `Examens ${chosen.toUpperCase()} + ${second.toUpperCase()}`;
+  }
+  const results = await Promise.all(
+    cats.map(c => fetch(`${API}/bank/questions?category=${encodeURIComponent(c)}`).then(r => r.json()))
+  );
+  let pool = results.flat();
+  const seen = new Set();
+  pool = pool.filter(q => { if (seen.has(q.id)) return false; seen.add(q.id); return true; });
+  const isFull = (examHostCfg.minutes === 45 && examHostCfg.diff === 'normal');
+  if (!isFull) { shuffleArray(pool); pool = pool.slice(0, n); }
+  return { pool, label };
+}
+
+async function launchExam() {
+  const btn = document.getElementById('btn-launch-exam');
+  btn.textContent = 'Création…'; btn.disabled = true;
+
+  const { pool, label } = await buildExamHostPool();
+  if (pool.length === 0) {
+    alert('Aucune question disponible.');
+    btn.textContent = 'Créer la session →'; btn.disabled = false; return;
+  }
+
+  // 1. Session mode exam
+  const sRes = await fetch(`${API}/sessions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode: 'exam' })
+  });
+  const sData = await sRes.json();
+  examSessionCode = sData.code;
+  sessionCode = sData.code;
+
+  // 2. Setup
+  const timeLimitSec = examHostCfg.minutes * 60;
+  await fetch(`${API}/sessions/${examSessionCode}/exam/setup`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      time_limit_seconds: timeLimitSec,
+      label: label,
+      questions: pool.map((q, i) => ({
+        order_index: i,
+        num_choices: q.num_choices,
+        correct_choices: q.correct_choices,
+        bank_question_id: q.id,
+        question_text: q.text,
+        choices_text: q.choices_text,
+        category: q.category,
+        explanation: q.explanation,
+      })),
+    })
+  });
+
+  // 3. Salle d'attente host + QR
+  document.getElementById('nav-code').textContent = examSessionCode;
+  document.getElementById('exam-screen').style.display = 'none';
+  document.getElementById('exam-waiting').style.display = 'flex';
+  document.getElementById('exam-waiting').style.flexDirection = 'column';
+  document.getElementById('qr-panel').style.display = 'block';
+  document.getElementById('btn-end').style.display = 'block';
+
+  const joinUrl = `${window.location.origin}/student.html?session=${examSessionCode}`;
+  document.getElementById('sidebar-code').textContent = examSessionCode;
+  document.getElementById('join-url-text').textContent = joinUrl;
+  const img = document.createElement('img');
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(joinUrl)}&bgcolor=1a1a24&color=e8e8f0`;
+  img.style.borderRadius = '8px'; img.width = 180; img.height = 180;
+  document.getElementById('qr-canvas').replaceWith(img);
+
+  document.getElementById('exam-q-count').textContent = pool.length;
+  document.getElementById('exam-timer-display').textContent = `${examHostCfg.minutes} min`;
+
+  connectWS();
+  btn.textContent = 'Créer la session →'; btn.disabled = false;
+}
+
+async function startExam() {
+  const btn = document.getElementById('btn-start-exam-host');
+  btn.textContent = 'Lancement…'; btn.disabled = true;
+  await fetch(`${API}/sessions/${examSessionCode}/exam/start`, { method: 'POST' });
+  btn.textContent = '✓ Examen lancé !';
+  document.getElementById('exam-ranking-waiting').style.display = 'block';
+}
+
+// Chrono host pendant l'examen (point 1), synchro sur l'heure serveur.
+let examHostTimerInterval = null;
+function startExamHostTimer(startedAtIso, timeLimitSec) {
+  if (!timeLimitSec) return;
+  const startedAt = new Date(startedAtIso);
+  const el = document.getElementById('exam-timer-display');
+  clearInterval(examHostTimerInterval);
+  const tick = () => {
+    const elapsed = (Date.now() - startedAt.getTime()) / 1000;
+    const remaining = Math.max(0, timeLimitSec - elapsed);
+    const m = Math.floor(remaining / 60);
+    const s = Math.floor(remaining % 60);
+    el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    el.classList.toggle('exam-timer-urgent', remaining <= 60);
+    if (remaining <= 0) clearInterval(examHostTimerInterval);
+  };
+  tick();
+  examHostTimerInterval = setInterval(tick, 1000);
+}
+
+// Recap host stats par question (point 3), option dépliable.
+let examStatsLoaded = false;
+async function toggleExamStats() {
+  const panel = document.getElementById('exam-stats-panel');
+  const btn = document.getElementById('btn-exam-stats');
+  if (panel.style.display === 'block') {
+    panel.style.display = 'none';
+    btn.textContent = '📊 Voir les stats par question';
+    return;
+  }
+  panel.style.display = 'block';
+  btn.textContent = '📊 Masquer les stats';
+  if (examStatsLoaded) return;   // deja charge, on ne refait pas l'appel
+
+  panel.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;padding:12px 0;">Chargement…</div>';
+  try {
+    const res = await fetch(`${API}/sessions/${examSessionCode}/exam/stats`);
+    const data = await res.json();
+    renderExamStats(data);
+    examStatsLoaded = true;
+  } catch (e) {
+    panel.innerHTML = '<div style="color:var(--red);font-size:0.85rem;">Erreur au chargement des stats.</div>';
+  }
+}
+
+function renderExamStats(data) {
+  const panel = document.getElementById('exam-stats-panel');
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if (!data.questions || data.questions.length === 0) {
+    panel.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;">Aucune donnée.</div>';
+    return;
+  }
+  let html = `<div style="font-size:0.75rem;color:var(--muted);margin-bottom:10px;">${data.participant_count} candidat(s) · questions triées de la plus ratée à la mieux réussie</div>`;
+  data.questions.forEach(q => {
+    // Couleur du taux d'erreur : rouge si > 50%, orange si > 25%, vert sinon
+    const cls = q.wrong_pct > 50 ? 'exam-stat-high' : (q.wrong_pct > 25 ? 'exam-stat-mid' : 'exam-stat-low');
+    const goodTxt = q.good_text.length ? q.good_text.map(esc).join(', ') : '';
+    html += `
+      <div class="exam-stat-q">
+        <div class="exam-stat-head">
+          <span class="exam-stat-num">Q${q.order_index + 1}</span>
+          <span class="exam-stat-badge ${cls}">${q.wrong_pct}% faux</span>
+          <span class="exam-stat-ratio">${q.wrong}/${q.total_answers}</span>
+        </div>
+        <div class="exam-stat-text">${esc(q.question_text || '')}</div>
+        <div class="exam-stat-good">✓ ${goodTxt}</div>
+      </div>`;
+  });
+  panel.innerHTML = html;
+}
+
+async function forceExamRanking() {
+  await fetch(`${API}/sessions/${examSessionCode}/exam/ranking`, { method: 'POST' });
+}
+
+function showExamRankingHost(ranking, isLive) {
+  const medals = ['🥇','🥈','🥉'];
+  const classes = ['gold','silver','bronze'];
+  const table = document.getElementById('exam-ranking-table');
+  table.innerHTML = '';
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  ranking.forEach((entry, i) => {
+    const row = document.createElement('div');
+    row.className = `ranking-row ${classes[i] || ''}`;
+    const elapsed = Math.round(entry.elapsed_seconds);
+    const min = Math.floor(elapsed / 60), sec = elapsed % 60;
+    const timeStr = min > 0 ? `${min}m${sec.toString().padStart(2,'0')}s` : `${sec}s`;
+    const badge = entry.passed ? '✅' : '❌';
+    row.innerHTML =
+      `<span class="ranking-pos">${medals[i] || '#' + (i + 1)}</span>` +
+      `<span class="ranking-name">${esc(entry.display_name)} ${badge}</span>` +
+      `<span class="ranking-score">${entry.score}/1000</span>` +
+      `<span class="ranking-time">${timeStr}</span>`;
+    table.appendChild(row);
+  });
+  document.getElementById('exam-ranking-waiting').style.display = 'none';
+  document.getElementById('exam-ranking-section').style.display = 'block';
+  const titleEl = document.getElementById('exam-ranking-title');
+  if (titleEl) titleEl.textContent = isLive ? 'CLASSEMENT EN COURS…' : 'CLASSEMENT FINAL';
 }

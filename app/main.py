@@ -56,6 +56,8 @@ class QuestionState:
         self.choices_text = choices_text or []
         self.status = "pending"     # pending | active | revealed
         self.started_at = None      # datetime UTC quand la question est lancée
+        self.category = None        # examen source (mode exam) : breakdown
+        self.explanation = None     # corrige (mode exam) : recap final
         # Réponses : dict participant_id -> {selected_choices, is_correct, display_name}
         self.answers: dict[int, dict] = {}
 
@@ -76,6 +78,13 @@ class SessionState:
         self.battle_started_at = None
         self.battle_roster: list[int] = []   # joueurs figés au lancement
         self.finished: dict[int, dict] = {}  # pid -> {score, total, elapsed, finished_at}
+
+        # --- Mode Exam (examen blanc) ---
+        # Reutilise le moteur Battle (roster, finished, /answer) mais avec un
+        # chrono global obligatoire et un score /1000. En memoire comme Battle.
+        self.exam_time_limit_seconds: int | None = None
+        self.exam_started_at = None
+        self.exam_label: str | None = None   # ex "Examen A" ou "Examens A + C"
 
     def add_participant(self, display_name: str) -> int:
         pid = self._next_participant_id
@@ -563,8 +572,240 @@ async def battle_force_ranking(code: str):
 
 
 # ---------------------------------------------------------------------------
-# WebSocket
+# Routes : Mode Exam (examen blanc) -- solo ou multijoueur (host)
+# Reutilise le moteur Battle : meme /answer, meme roster, meme finished.
+# Specificites : chrono global obligatoire, score /1000 (seuil 700),
+# breakdown par examen source. Tout en memoire, comme Battle.
 # ---------------------------------------------------------------------------
+
+EXAM_PASS_SCORE = 700
+
+
+def _exam_score_1000(s: SessionState, pid: int) -> tuple[int, int, int]:
+    """Retourne (bonnes, total, score_sur_1000) pour un joueur."""
+    total = len(s.questions)
+    good = sum(
+        1 for q in s.questions.values()
+        if (a := q.answers.get(pid)) and a["is_correct"]
+    )
+    score = round(good / total * 1000) if total else 0
+    return good, total, score
+
+
+def _exam_breakdown(s: SessionState, pid: int) -> dict:
+    """Detail par examen source (categorie) : bonnes / total par examen."""
+    by_cat: dict[str, dict] = {}
+    for q in s.questions.values():
+        cat = q.category or "exam"
+        slot = by_cat.setdefault(cat, {"good": 0, "total": 0})
+        slot["total"] += 1
+        a = q.answers.get(pid)
+        if a and a["is_correct"]:
+            slot["good"] += 1
+    return by_cat
+
+
+def _exam_ranking_final(s: SessionState) -> list[schemas.ExamRankEntry]:
+    """Classement complet du roster. Non-finisseurs = score partiel, temps max."""
+    if s.exam_time_limit_seconds:
+        max_elapsed = float(s.exam_time_limit_seconds)
+    elif s.exam_started_at:
+        max_elapsed = (datetime.now(timezone.utc) - s.exam_started_at).total_seconds()
+    else:
+        max_elapsed = 0.0
+
+    entries = []
+    for pid in s.battle_roster:
+        good, total, score = _exam_score_1000(s, pid)
+        if pid in s.finished:
+            elapsed = s.finished[pid]["elapsed"]
+        else:
+            elapsed = max_elapsed
+        entries.append(schemas.ExamRankEntry(
+            display_name=s.participants.get(pid, "Anonyme"),
+            correct=good,
+            total=total,
+            score=score,
+            passed=score >= EXAM_PASS_SCORE,
+            elapsed_seconds=elapsed,
+        ))
+    # Meilleur score d'abord, puis temps le plus court
+    entries.sort(key=lambda e: (-e.score, e.elapsed_seconds))
+    return entries
+
+
+def _exam_ranking_live(s: SessionState) -> list[schemas.ExamRankEntry]:
+    """Classement partiel : seulement ceux qui ont deja fini."""
+    entries = []
+    for pid, info in s.finished.items():
+        good, total, score = _exam_score_1000(s, pid)
+        entries.append(schemas.ExamRankEntry(
+            display_name=s.participants.get(pid, "Anonyme"),
+            correct=good,
+            total=total,
+            score=score,
+            passed=score >= EXAM_PASS_SCORE,
+            elapsed_seconds=info["elapsed"],
+        ))
+    entries.sort(key=lambda e: (-e.score, e.elapsed_seconds))
+    return entries
+
+
+@app.post("/sessions/{code}/exam/setup")
+def exam_setup(code: str, payload: schemas.ExamSetup):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    s.exam_time_limit_seconds = payload.time_limit_seconds
+    s.exam_label = payload.label
+    for q in payload.questions:
+        qs = s.add_question(
+            order_index=q.order_index,
+            num_choices=q.num_choices,
+            correct_choices=q.correct_choices,
+            time_limit_seconds=None,          # chrono global, pas par question
+            bank_question_id=q.bank_question_id,
+            question_text=q.question_text,
+            choices_text=q.choices_text,
+        )
+        qs.category = q.category              # examen source (breakdown)
+        qs.explanation = q.explanation        # corrige, montre dans le recap
+    return {"ok": True, "question_count": len(s.questions)}
+
+
+@app.post("/sessions/{code}/exam/start")
+async def exam_start(code: str):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    s.status = "active"
+    s.exam_started_at = datetime.now(timezone.utc)
+    s.battle_roster = list(s.participants.keys())   # fige les joueurs presents
+
+    ordered = sorted(s.questions.values(), key=lambda q: q.order_index)
+    questions_payload = []
+    for q in ordered:
+        q.status = "active"                          # debloque /answer pour tout le set
+        questions_payload.append({
+            "question_id": q.id,
+            "order_index": q.order_index,
+            "num_choices": q.num_choices,
+            "correct_choices": q.correct_choices,
+            "question_text": q.question_text,
+            "choices_text": q.choices_text,
+            "category": q.category,
+            "explanation": q.explanation,
+        })
+
+    await manager.broadcast(code, {
+        "type": "exam_start",
+        "time_limit_seconds": s.exam_time_limit_seconds,
+        "started_at": s.exam_started_at.isoformat(),
+        "label": s.exam_label,
+        "questions": questions_payload,
+    })
+    return {"ok": True}
+
+
+@app.post("/sessions/{code}/exam/finish", response_model=schemas.ExamResult)
+async def exam_finish(code: str, payload: schemas.ExamFinish):
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    pid = payload.participant_id
+
+    good, total, score = _exam_score_1000(s, pid)
+    elapsed = (
+        (datetime.now(timezone.utc) - s.exam_started_at).total_seconds()
+        if s.exam_started_at else 0.0
+    )
+    if s.exam_time_limit_seconds:
+        elapsed = min(elapsed, float(s.exam_time_limit_seconds))
+
+    s.finished[pid] = {
+        "score": good,
+        "total": total,
+        "elapsed": elapsed,
+        "finished_at": datetime.now(timezone.utc),
+    }
+
+    # Dernier du roster a finir -> classement final. Sinon classement live partiel.
+    all_finished = bool(s.battle_roster) and set(s.battle_roster).issubset(s.finished.keys())
+    ranking = None
+    if all_finished:
+        ranking = _exam_ranking_final(s)
+        await manager.broadcast(code, {
+            "type": "exam_ranking",
+            "ranking": [e.model_dump() for e in ranking],
+        })
+    else:
+        live = _exam_ranking_live(s)
+        await manager.broadcast(code, {
+            "type": "exam_ranking_update",
+            "ranking": [e.model_dump() for e in live],
+        })
+
+    return schemas.ExamResult(
+        participant_id=pid,
+        correct=good,
+        total=total,
+        score=score,
+        passed=score >= EXAM_PASS_SCORE,
+        elapsed_seconds=elapsed,
+        breakdown=_exam_breakdown(s, pid),
+        all_finished=all_finished,
+        ranking=ranking,
+    )
+
+
+@app.post("/sessions/{code}/exam/ranking", response_model=list[schemas.ExamRankEntry])
+async def exam_force_ranking(code: str):
+    """Echappatoire host : force le classement FINAL complet."""
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+    ranking = _exam_ranking_final(s)
+    await manager.broadcast(code, {
+        "type": "exam_ranking",
+        "ranking": [e.model_dump() for e in ranking],
+    })
+    return ranking
+
+
+@app.get("/sessions/{code}/exam/stats")
+def exam_stats(code: str):
+    """Recap host (point 3) : pour chaque question, taux d'erreur de la promo.
+    Trie les questions de la plus ratee a la moins ratee. En memoire, dispo
+    tant que la session vit."""
+    s = sessions.get(code)
+    if not s:
+        raise HTTPException(404, "Session introuvable")
+
+    rows = []
+    for q in sorted(s.questions.values(), key=lambda x: x.order_index):
+        total = len(q.answers)
+        wrong = sum(1 for a in q.answers.values() if not a["is_correct"])
+        correct = total - wrong
+        wrong_pct = round(wrong / total * 100) if total else 0
+        good_letters = q.correct_choices
+        good_text = [
+            (q.choices_text[i] if q.choices_text and i < len(q.choices_text) else str(i))
+            for i in good_letters
+        ]
+        rows.append({
+            "order_index": q.order_index,
+            "question_text": q.question_text,
+            "total_answers": total,
+            "wrong": wrong,
+            "correct": correct,
+            "wrong_pct": wrong_pct,
+            "correct_choices": good_letters,
+            "good_text": good_text,
+            "explanation": q.explanation,
+        })
+    # Question la plus problematique en premier
+    rows.sort(key=lambda r: (-r["wrong_pct"], r["order_index"]))
+    return {"questions": rows, "participant_count": len(s.battle_roster)}
 
 @app.websocket("/ws/{session_code}")
 async def websocket_endpoint(websocket: WebSocket, session_code: str):
@@ -604,6 +845,28 @@ async def websocket_endpoint(websocket: WebSocket, session_code: str):
                     "type": "battle_start",
                     "time_limit_seconds": s.battle_time_limit_seconds,
                     "started_at": s.battle_started_at.isoformat(),
+                    "questions": questions_payload,
+                }))
+
+            # Mode exam déjà lancé : on rejoue tout le set (chrono serveur survit
+            # au refresh grace a started_at synchronise).
+            if s.mode == "exam" and s.status == "active" and s.exam_started_at:
+                ordered = sorted(s.questions.values(), key=lambda q: q.order_index)
+                questions_payload = [{
+                    "question_id": q.id,
+                    "order_index": q.order_index,
+                    "num_choices": q.num_choices,
+                    "correct_choices": q.correct_choices,
+                    "question_text": q.question_text,
+                    "choices_text": q.choices_text,
+                    "category": q.category,
+                    "explanation": q.explanation,
+                } for q in ordered]
+                await websocket.send_text(json.dumps({
+                    "type": "exam_start",
+                    "time_limit_seconds": s.exam_time_limit_seconds,
+                    "started_at": s.exam_started_at.isoformat(),
+                    "label": s.exam_label,
                     "questions": questions_payload,
                 }))
 

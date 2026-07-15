@@ -12,6 +12,7 @@ class QuestionBankCreate(BaseModel):
     correct_choices: list[int]
     time_limit_seconds: int | None = None
     category: str | None = None
+    explanation: str | None = None
 
 class QuestionBankOut(BaseModel):
     id: int
@@ -21,6 +22,7 @@ class QuestionBankOut(BaseModel):
     correct_choices: list[int]
     time_limit_seconds: int | None
     category: str | None
+    explanation: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -132,6 +134,46 @@ class BattleResult(BaseModel):
     elapsed_seconds: float
     all_finished: bool
     ranking: list[BattleRankEntry] | None = None
+
+
+# --- Exam (examen blanc, mémoire) ---
+
+class ExamQuestionIn(BaseModel):
+    order_index: int
+    num_choices: int
+    correct_choices: list[int]
+    bank_question_id: int | None = None
+    question_text: str | None = None
+    choices_text: list[str] | None = None
+    category: str | None = None       # examen source : "exam-blanc-a" ...
+    explanation: str | None = None    # corrigé montré dans le récap
+
+class ExamSetup(BaseModel):
+    time_limit_seconds: int | None = None   # chrono global ; None = sans chrono
+    label: str | None = None                 # ex "Examen A"
+    questions: list[ExamQuestionIn]
+
+class ExamFinish(BaseModel):
+    participant_id: int
+
+class ExamRankEntry(BaseModel):
+    display_name: str
+    correct: int
+    total: int
+    score: int          # sur 1000
+    passed: bool
+    elapsed_seconds: float
+
+class ExamResult(BaseModel):
+    participant_id: int
+    correct: int
+    total: int
+    score: int          # sur 1000
+    passed: bool
+    elapsed_seconds: float
+    breakdown: dict     # {categorie: {good, total}}
+    all_finished: bool
+    ranking: list[ExamRankEntry] | None = None
 
 
 # --- Flashcards (révision, DB persistante) ---
