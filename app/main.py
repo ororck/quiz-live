@@ -779,9 +779,14 @@ async def websocket_endpoint(websocket: WebSocket, session_code: str):
         # UNIQUEMENT à ce client, pour qu'il rattrape la question active.
         s = sessions.get(session_code)
         if s:
-            # Mode live : une question active à la fois -> on la rejoue
+            # Mode live : une question active à la fois -> on la rejoue.
+            # IMPORTANT : strictement mode == "live". En exam, exam_start met
+            # TOUTES les questions en "active" ; si on rejouait un question_start
+            # ici (comme le faisait l'ancienne condition mode != "battle"), un
+            # joueur en examen qui se reconnecte (microcoupure mobile) basculait
+            # sur l'ecran live "attente resultat" et restait bloque.
             for q in s.questions.values():
-                if q.status == "active" and s.mode != "battle":
+                if q.status == "active" and s.mode == "live":
                     await websocket.send_text(json.dumps({
                         "type": "question_start",
                         "question_id": q.id,
